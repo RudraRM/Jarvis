@@ -130,6 +130,9 @@
 
     <!-- Arc Reactor Center -->
     <div class="reactor-wrap">
+      <!-- Decorative HUD dial (non-interactive; ticks/arc/spokes injected by JS) -->
+      <div class="hud-dial" id="hud-dial" aria-hidden="true"></div>
+
       <div class="reactor-ring ring-outer"></div>
       <div class="reactor-ring ring-mid"></div>
       <div class="reactor-ring ring-inner"></div>
@@ -138,10 +141,25 @@
       <div class="orbit-indicator oi-2"><span class="oi-val" id="oi-2">64%</span></div>
       <div class="orbit-indicator oi-3"><span class="oi-val" id="oi-3">99%</span></div>
 
-      <div class="reactor-core">
-        <svg viewBox="0 0 200 200" class="reactor-triangle">
-          <polygon points="100,30 165,155 35,155" />
-          <polygon points="100,60 145,145 55,145" class="tri-inner" />
+      <div class="reactor-core" id="reactor-core">
+        <svg viewBox="0 0 200 200" class="reactor-triangle heart-svg" aria-hidden="true">
+          <defs>
+            <radialGradient id="coreGlow" cx="50%" cy="42%" r="65%">
+              <stop offset="0%" stop-color="#ffffff"/>
+              <stop offset="45%" stop-color="#aef9ff"/>
+              <stop offset="100%" stop-color="#00d9ff" stop-opacity="0.2"/>
+            </radialGradient>
+          </defs>
+          <polygon class="heart-hex" points="100,8 166,50 166,132 100,192 34,132 34,50"/>
+          <polygon class="heart-hex-inner" points="100,28 148,58 148,124 100,168 52,124 52,58"/>
+          <circle class="heart-node" cx="100" cy="8" r="4"/>
+          <circle class="heart-node" cx="166" cy="50" r="4"/>
+          <circle class="heart-node" cx="166" cy="132" r="4"/>
+          <circle class="heart-node" cx="100" cy="192" r="4"/>
+          <circle class="heart-node" cx="34" cy="132" r="4"/>
+          <circle class="heart-node" cx="34" cy="50" r="4"/>
+          <polygon class="heart-triangle" points="100,152 146,72 54,72"/>
+          <polygon class="heart-triangle-inner" points="100,124 129,76 71,76"/>
         </svg>
       </div>
 
@@ -219,7 +237,10 @@
       <button id="chat-close-btn" class="chat-icon-btn" title="Close">&times;</button>
     </div>
   </div>
-  <div class="chat-messages" id="chat-messages"></div>
+  <div class="chat-hint">
+    Tap the mic or type below. JARVIS answers out loud through the reactor core &mdash;
+    no message log is kept on screen.
+  </div>
   <div class="chat-input-row">
     <button id="mic-btn" class="mic-btn" title="Speak to JARVIS">&#127908;</button>
     <input type="text" id="chat-input" placeholder="Type or speak your message..." autocomplete="off">
