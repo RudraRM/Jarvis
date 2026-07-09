@@ -281,8 +281,34 @@
     <input type="password" id="settings-apikey" placeholder="sk-...">
     <p class="settings-hint" id="settings-provider-hint"></p>
 
+    <hr class="settings-divider">
+    <h3>VOICE (TEXT-TO-SPEECH)</h3>
+    <p class="settings-note">
+      By default JARVIS speaks with your browser's built-in voice. For a warmer, more
+      expressive, studio-quality voice, connect a premium TTS provider below with its own
+      API key &mdash; also stored only in this browser and sent only to that provider.
+    </p>
+    <label for="settings-tts-provider">Voice Provider</label>
+    <select id="settings-tts-provider">
+      <option value="browser">Browser (built-in, free)</option>
+      <option value="openai">OpenAI TTS</option>
+      <option value="elevenlabs">ElevenLabs</option>
+    </select>
+
+    <div class="settings-field" id="tts-key-field">
+      <label for="settings-tts-apikey">Voice API Key</label>
+      <input type="password" id="settings-tts-apikey" placeholder="sk-...">
+    </div>
+
+    <div class="settings-field" id="tts-voice-field">
+      <label for="settings-tts-voice">Voice</label>
+      <input type="text" id="settings-tts-voice" placeholder="onyx">
+    </div>
+    <p class="settings-hint" id="settings-tts-hint"></p>
+
     <div class="settings-actions">
-      <button id="settings-clear-btn" class="hud-btn danger-btn">CLEAR KEY</button>
+      <button id="settings-preview-voice-btn" class="hud-btn">PREVIEW VOICE</button>
+      <button id="settings-clear-btn" class="hud-btn danger-btn">CLEAR KEYS</button>
       <button id="settings-cancel-btn" class="hud-btn">CANCEL</button>
       <button id="settings-save-btn" class="hud-btn">SAVE</button>
     </div>

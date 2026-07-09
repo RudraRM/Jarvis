@@ -811,6 +811,11 @@ body.darker-theme .panel { background: linear-gradient(135deg, rgba(10,16,30,0.7
   line-height: 1.5;
   margin-bottom: 18px;
 }
+.settings-divider {
+  border: none;
+  border-top: 1px solid rgba(0,217,255,0.25);
+  margin: 22px 0 16px;
+}
 .settings-box label {
   display: block;
   font-size: 0.7rem;

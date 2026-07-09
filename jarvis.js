@@ -543,12 +543,19 @@
   const settingsCancelBtn = document.getElementById('settings-cancel-btn');
   const settingsSaveBtn = document.getElementById('settings-save-btn');
   const settingsClearBtn = document.getElementById('settings-clear-btn');
+  const settingsPreviewVoiceBtn = document.getElementById('settings-preview-voice-btn');
   const settingsProviderInput = document.getElementById('settings-provider');
   const settingsBaseUrlField = document.getElementById('baseurl-field');
   const settingsBaseUrlInput = document.getElementById('settings-baseurl');
   const settingsModelInput = document.getElementById('settings-model');
   const settingsApiKeyInput = document.getElementById('settings-apikey');
   const settingsProviderHint = document.getElementById('settings-provider-hint');
+  const settingsTtsProviderInput = document.getElementById('settings-tts-provider');
+  const settingsTtsKeyField = document.getElementById('tts-key-field');
+  const settingsTtsApiKeyInput = document.getElementById('settings-tts-apikey');
+  const settingsTtsVoiceField = document.getElementById('tts-voice-field');
+  const settingsTtsVoiceInput = document.getElementById('settings-tts-voice');
+  const settingsTtsHint = document.getElementById('settings-tts-hint');
 
   const PROVIDER_PRESETS = {
     openai: {
@@ -600,6 +607,74 @@
     return true;
   }
 
+  /* ============ VOICE (TEXT-TO-SPEECH) SETTINGS ============
+     A warm, expressive, moderately-paced, low-to-mid-pitch masculine
+     delivery — premium-assistant/audiobook-narrator territory rather
+     than a flat, robotic browser voice. OpenAI's gpt-4o-mini-tts takes
+     a plain-language style "instructions" string, so that description
+     is passed through almost verbatim to steer the delivery. */
+  const TTS_SETTINGS_KEY = 'jarvis_tts_settings_v1';
+  const VOICE_STYLE_INSTRUCTIONS =
+    'Speak in a warm, expressive, conversational tone with a polished, professional delivery, ' +
+    'like a premium AI assistant or a skilled audiobook narrator. Use a low-to-mid pitch with a ' +
+    'warm, balanced resonance — masculine but never harsh or overly deep. Keep the pacing moderate ' +
+    'and easy to follow, never rushed. Articulate clearly with distinct pronunciation. Stay calm but ' +
+    'engaging, confident without being overly enthusiastic, and vary emphasis and intonation ' +
+    'naturally so it never sounds monotone or robotic.';
+
+  const TTS_PROVIDER_PRESETS = {
+    browser: {
+      needsKey: false,
+      needsVoice: false,
+      hint: 'Uses your browser\'s built-in speech synthesis. Free, works offline, no setup — but sounds noticeably more synthetic than a premium voice.'
+    },
+    openai: {
+      needsKey: true,
+      voice: 'onyx',
+      keyPlaceholder: 'sk-...',
+      voicePlaceholder: 'onyx',
+      hint: 'OpenAI text-to-speech (gpt-4o-mini-tts). "onyx" is a warm, low-mid male voice; also try "echo" or "fable". Get a key at platform.openai.com.'
+    },
+    elevenlabs: {
+      needsKey: true,
+      voice: 'pNInz6obpgDQGcFmaJgB',
+      keyPlaceholder: 'API key',
+      voicePlaceholder: 'Voice ID (default: Adam)',
+      hint: 'ElevenLabs premium voice cloning/synthesis. Defaults to "Adam" — a warm, expressive male voice. Get a key at elevenlabs.io.'
+    }
+  };
+
+  function loadTtsSettings() {
+    try {
+      const raw = localStorage.getItem(TTS_SETTINGS_KEY);
+      return raw ? JSON.parse(raw) : { provider: 'browser' };
+    } catch {
+      return { provider: 'browser' };
+    }
+  }
+  function saveTtsSettings(settings) {
+    localStorage.setItem(TTS_SETTINGS_KEY, JSON.stringify(settings));
+  }
+
+  function applyTtsProviderUI(provider, opts) {
+    const preset = TTS_PROVIDER_PRESETS[provider] || TTS_PROVIDER_PRESETS.browser;
+    settingsTtsKeyField.style.display = preset.needsKey ? '' : 'none';
+    settingsTtsVoiceField.style.display = preset.needsVoice === false ? 'none' : '';
+    settingsTtsApiKeyInput.placeholder = preset.keyPlaceholder || 'API key';
+    settingsTtsVoiceInput.placeholder = preset.voicePlaceholder || 'voice';
+    settingsTtsHint.textContent = preset.hint || '';
+    if (opts && opts.fillDefaults && !settingsTtsVoiceInput.value) {
+      settingsTtsVoiceInput.value = preset.voice || '';
+    }
+  }
+
+  if (settingsTtsProviderInput) {
+    settingsTtsProviderInput.addEventListener('change', () => {
+      settingsTtsVoiceInput.value = '';
+      applyTtsProviderUI(settingsTtsProviderInput.value, { fillDefaults: true });
+    });
+  }
+
   function applyProviderUI(provider, opts) {
     const preset = PROVIDER_PRESETS[provider] || PROVIDER_PRESETS.openai;
     settingsBaseUrlField.style.display = preset.needsBaseUrl ? '' : 'none';
@@ -628,6 +703,14 @@
     settingsModelInput.value = s.model || '';
     settingsApiKeyInput.value = s.apiKey || '';
     applyProviderUI(provider, { fillDefaults: !s.apiKey });
+
+    const ts = loadTtsSettings();
+    const ttsProvider = ts.provider || 'browser';
+    settingsTtsProviderInput.value = ttsProvider;
+    settingsTtsApiKeyInput.value = ts.apiKey || '';
+    settingsTtsVoiceInput.value = ts.voice || '';
+    applyTtsProviderUI(ttsProvider, { fillDefaults: !ts.apiKey });
+
     settingsModal.classList.add('open');
   }
   function closeSettingsModal() { settingsModal.classList.remove('open'); }
@@ -650,6 +733,17 @@
         return;
       }
       saveAiSettings({ provider, baseUrl, model, apiKey });
+
+      const ttsProvider = settingsTtsProviderInput.value;
+      const ttsPreset = TTS_PROVIDER_PRESETS[ttsProvider] || TTS_PROVIDER_PRESETS.browser;
+      const ttsApiKey = settingsTtsApiKeyInput.value.trim();
+      const ttsVoice = settingsTtsVoiceInput.value.trim();
+      if (ttsProvider !== 'browser' && ttsApiKey) {
+        saveTtsSettings({ provider: ttsProvider, apiKey: ttsApiKey, voice: ttsVoice || ttsPreset.voice });
+      } else {
+        saveTtsSettings({ provider: 'browser' });
+      }
+
       closeSettingsModal();
       chatStatusEl.textContent = 'AI connection configured. Ready to talk.';
       speak('AI CONNECTION CONFIGURED. READY TO TALK.');
@@ -658,10 +752,26 @@
   if (settingsClearBtn) {
     settingsClearBtn.addEventListener('click', () => {
       localStorage.removeItem(SETTINGS_KEY);
+      localStorage.removeItem(TTS_SETTINGS_KEY);
       settingsApiKeyInput.value = '';
-      chatStatusEl.textContent = 'API key cleared. Configure an AI provider in settings to enable real conversation.';
-      speak('API KEY CLEARED.');
+      settingsTtsApiKeyInput.value = '';
+      settingsTtsProviderInput.value = 'browser';
+      applyTtsProviderUI('browser');
+      chatStatusEl.textContent = 'API keys cleared. Configure an AI provider in settings to enable real conversation.';
+      speak('API KEYS CLEARED.');
       closeSettingsModal();
+    });
+  }
+  if (settingsPreviewVoiceBtn) {
+    settingsPreviewVoiceBtn.addEventListener('click', () => {
+      const ttsProvider = settingsTtsProviderInput.value;
+      const ttsPreset = TTS_PROVIDER_PRESETS[ttsProvider] || TTS_PROVIDER_PRESETS.browser;
+      const ttsApiKey = settingsTtsApiKeyInput.value.trim();
+      const ttsVoice = settingsTtsVoiceInput.value.trim() || ttsPreset.voice;
+      const previewSettings = ttsProvider !== 'browser' && ttsApiKey
+        ? { provider: ttsProvider, apiKey: ttsApiKey, voice: ttsVoice }
+        : { provider: 'browser' };
+      previewVoice(previewSettings);
     });
   }
 
@@ -749,17 +859,80 @@
     return callOpenAiCompatible(userText, settings);
   }
 
-  /* Speaks a reply aloud through the reactor core: real TTS audio plus a
-     live caption under the core, with the core itself pulsing while it
-     talks — this is the "conversation", there is no message log. If the
-     reply is itself a question, JARVIS starts listening for the answer
-     the moment it stops talking — no "Hey Jarvis" or mic tap needed. */
-  function speakReply(text) {
-    speak(text, { duration: captionDuration(text) });
+  /* Fetches spoken audio from a premium TTS provider as a Blob. Throws
+     on any failure so the caller can fall back to the browser voice. */
+  async function fetchPremiumTtsAudio(text, settings) {
+    if (settings.provider === 'openai') {
+      const res = await fetch('https://api.openai.com/v1/audio/speech', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + settings.apiKey
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini-tts',
+          voice: settings.voice || 'onyx',
+          input: text,
+          instructions: VOICE_STYLE_INSTRUCTIONS
+        })
+      });
+      if (!res.ok) {
+        const errBody = await res.text().catch(() => '');
+        throw new Error(`OpenAI TTS error ${res.status}: ${errBody.slice(0, 200) || res.statusText}`);
+      }
+      return res.blob();
+    }
 
+    if (settings.provider === 'elevenlabs') {
+      const voiceId = settings.voice || 'pNInz6obpgDQGcFmaJgB';
+      const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'xi-api-key': settings.apiKey
+        },
+        body: JSON.stringify({
+          text,
+          model_id: 'eleven_multilingual_v2',
+          voice_settings: { stability: 0.45, similarity_boost: 0.8, style: 0.35, use_speaker_boost: true }
+        })
+      });
+      if (!res.ok) {
+        const errBody = await res.text().catch(() => '');
+        throw new Error(`ElevenLabs error ${res.status}: ${errBody.slice(0, 200) || res.statusText}`);
+      }
+      return res.blob();
+    }
+
+    throw new Error('No premium voice provider configured.');
+  }
+
+  let currentTtsAudio = null;
+  function playAudioBlob(blob) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      currentTtsAudio = audio;
+      audio.onplay = () => setReactorState('speaking');
+      audio.onended = () => {
+        URL.revokeObjectURL(url);
+        if (currentTtsAudio === audio) currentTtsAudio = null;
+        setReactorState('idle');
+        resolve();
+      };
+      audio.onerror = () => {
+        URL.revokeObjectURL(url);
+        if (currentTtsAudio === audio) currentTtsAudio = null;
+        reject(new Error('Audio playback failed.'));
+      };
+      audio.play().catch(reject);
+    });
+  }
+
+  function speakWithBrowserVoice(text, onDone) {
     if (!('speechSynthesis' in window)) {
       setReactorState('idle');
-      autoListenIfQuestion(text);
+      onDone();
       return;
     }
     window.speechSynthesis.cancel();
@@ -767,12 +940,58 @@
     utter.rate = 1;
     utter.pitch = 0.9;
     utter.onstart = () => setReactorState('speaking');
-    utter.onend = () => {
-      setReactorState('idle');
-      autoListenIfQuestion(text);
-    };
-    utter.onerror = () => setReactorState('idle');
+    utter.onend = () => { setReactorState('idle'); onDone(); };
+    utter.onerror = () => { setReactorState('idle'); onDone(); };
     window.speechSynthesis.speak(utter);
+  }
+
+  /* Speaks a reply aloud through the reactor core: real TTS audio plus a
+     live caption under the core, with the core itself pulsing while it
+     talks — this is the "conversation", there is no message log. Uses a
+     configured premium voice provider if available, falling back to the
+     browser's built-in voice on any failure. If the reply is itself a
+     question, JARVIS starts listening for the answer the moment it stops
+     talking — no "Hey Jarvis" or mic tap needed. */
+  async function speakReply(text) {
+    speak(text, { duration: captionDuration(text) });
+
+    if (currentTtsAudio) {
+      currentTtsAudio.pause();
+      currentTtsAudio = null;
+    }
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+
+    const ttsSettings = loadTtsSettings();
+    if (ttsSettings.provider && ttsSettings.provider !== 'browser' && ttsSettings.apiKey) {
+      try {
+        const blob = await fetchPremiumTtsAudio(text, ttsSettings);
+        await playAudioBlob(blob);
+        autoListenIfQuestion(text);
+        return;
+      } catch (err) {
+        console.warn('Premium voice failed, falling back to browser voice:', err);
+      }
+    }
+
+    speakWithBrowserVoice(text, () => autoListenIfQuestion(text));
+  }
+
+  /* Speaks a short sample line with whatever settings are currently in
+     the settings form (even if unsaved), so the user can preview a
+     voice before committing to it. */
+  function previewVoice(ttsSettings) {
+    const sample = "This is what I'll sound like when we talk. Shall we continue?";
+    if (ttsSettings.provider !== 'browser' && ttsSettings.apiKey) {
+      chatStatusEl.textContent = 'Loading voice preview...';
+      fetchPremiumTtsAudio(sample, ttsSettings)
+        .then((blob) => { chatStatusEl.textContent = ''; return playAudioBlob(blob); })
+        .catch((err) => {
+          chatStatusEl.textContent = 'Voice preview failed: ' + (err && err.message ? err.message : 'error.');
+          setReactorState('idle');
+        });
+    } else {
+      speakWithBrowserVoice(sample, () => {});
+    }
   }
 
   /* Defined further down (voice recognition section); referenced here via
