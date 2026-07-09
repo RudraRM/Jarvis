@@ -507,9 +507,43 @@
   const settingsCancelBtn = document.getElementById('settings-cancel-btn');
   const settingsSaveBtn = document.getElementById('settings-save-btn');
   const settingsClearBtn = document.getElementById('settings-clear-btn');
+  const settingsProviderInput = document.getElementById('settings-provider');
+  const settingsBaseUrlField = document.getElementById('baseurl-field');
   const settingsBaseUrlInput = document.getElementById('settings-baseurl');
   const settingsModelInput = document.getElementById('settings-model');
   const settingsApiKeyInput = document.getElementById('settings-apikey');
+  const settingsProviderHint = document.getElementById('settings-provider-hint');
+
+  const PROVIDER_PRESETS = {
+    openai: {
+      baseUrl: 'https://api.openai.com/v1',
+      model: 'gpt-4o-mini',
+      needsBaseUrl: true,
+      hint: 'Uses the OpenAI Chat Completions API. Get a key at platform.openai.com.',
+      keyPlaceholder: 'sk-...'
+    },
+    groq: {
+      baseUrl: 'https://api.groq.com/openai/v1',
+      model: 'llama-3.3-70b-versatile',
+      needsBaseUrl: true,
+      hint: 'Groq is OpenAI-compatible and typically very fast. Get a free key at console.groq.com.',
+      keyPlaceholder: 'gsk_...'
+    },
+    gemini: {
+      baseUrl: '',
+      model: 'gemini-2.0-flash',
+      needsBaseUrl: false,
+      hint: 'Uses Google’s Gemini API directly (no base URL needed). Get a free key at aistudio.google.com/apikey.',
+      keyPlaceholder: 'AIza...'
+    },
+    custom: {
+      baseUrl: '',
+      model: '',
+      needsBaseUrl: true,
+      hint: 'Any OpenAI-compatible Chat Completions endpoint (local model server, proxy, etc).',
+      keyPlaceholder: 'API key'
+    }
+  };
 
   function loadAiSettings() {
     try {
@@ -524,14 +558,40 @@
   }
   function aiConfigured() {
     const s = loadAiSettings();
-    return !!(s.apiKey && s.baseUrl && s.model);
+    if (!s.apiKey || !s.model) return false;
+    const preset = PROVIDER_PRESETS[s.provider] || PROVIDER_PRESETS.openai;
+    if (preset.needsBaseUrl && !s.baseUrl) return false;
+    return true;
+  }
+
+  function applyProviderUI(provider, opts) {
+    const preset = PROVIDER_PRESETS[provider] || PROVIDER_PRESETS.openai;
+    settingsBaseUrlField.style.display = preset.needsBaseUrl ? '' : 'none';
+    settingsApiKeyInput.placeholder = preset.keyPlaceholder;
+    settingsProviderHint.textContent = preset.hint;
+    if (opts && opts.fillDefaults) {
+      if (!settingsBaseUrlInput.value) settingsBaseUrlInput.value = preset.baseUrl;
+      if (!settingsModelInput.value) settingsModelInput.value = preset.model;
+    }
+    settingsModelInput.placeholder = preset.model || 'model name';
+  }
+
+  if (settingsProviderInput) {
+    settingsProviderInput.addEventListener('change', () => {
+      settingsBaseUrlInput.value = '';
+      settingsModelInput.value = '';
+      applyProviderUI(settingsProviderInput.value, { fillDefaults: true });
+    });
   }
 
   function openSettingsModal() {
     const s = loadAiSettings();
-    settingsBaseUrlInput.value = s.baseUrl || 'https://api.openai.com/v1';
-    settingsModelInput.value = s.model || 'gpt-4o-mini';
+    const provider = s.provider || 'openai';
+    settingsProviderInput.value = provider;
+    settingsBaseUrlInput.value = s.baseUrl || '';
+    settingsModelInput.value = s.model || '';
     settingsApiKeyInput.value = s.apiKey || '';
+    applyProviderUI(provider, { fillDefaults: !s.apiKey });
     settingsModal.classList.add('open');
   }
   function closeSettingsModal() { settingsModal.classList.remove('open'); }
@@ -543,15 +603,17 @@
   }
   if (settingsSaveBtn) {
     settingsSaveBtn.addEventListener('click', () => {
+      const provider = settingsProviderInput.value;
+      const preset = PROVIDER_PRESETS[provider] || PROVIDER_PRESETS.openai;
       const baseUrl = settingsBaseUrlInput.value.trim().replace(/\/+$/, '');
       const model = settingsModelInput.value.trim();
       const apiKey = settingsApiKeyInput.value.trim();
-      if (!baseUrl || !model || !apiKey) {
-        chatStatusEl.textContent = 'Please fill in base URL, model, and API key to enable chat.';
+      if (!model || !apiKey || (preset.needsBaseUrl && !baseUrl)) {
+        chatStatusEl.textContent = 'Please fill in the required fields to enable chat.';
         closeSettingsModal();
         return;
       }
-      saveAiSettings({ baseUrl, model, apiKey });
+      saveAiSettings({ provider, baseUrl, model, apiKey });
       closeSettingsModal();
       chatStatusEl.textContent = 'AI connection configured. Ready to talk.';
       speak('AI CONNECTION CONFIGURED. READY TO TALK.');
@@ -571,12 +633,16 @@
     { role: 'system', content: 'You are J.A.R.V.I.S., Tony Stark\'s AI assistant. Be concise, helpful, and a little witty.' }
   ];
 
-  async function callAI(userText) {
-    const settings = loadAiSettings();
-    conversationHistory.push({ role: 'user', content: userText });
+  function trimHistory() {
     if (conversationHistory.length > 21) {
       conversationHistory = [conversationHistory[0], ...conversationHistory.slice(-20)];
     }
+  }
+
+  /* OpenAI-compatible Chat Completions (OpenAI, Groq, local servers, etc.) */
+  async function callOpenAiCompatible(userText, settings) {
+    conversationHistory.push({ role: 'user', content: userText });
+    trimHistory();
 
     const res = await fetch(settings.baseUrl + '/chat/completions', {
       method: 'POST',
@@ -601,6 +667,50 @@
     if (!reply) throw new Error('No response returned by the model.');
     conversationHistory.push({ role: 'assistant', content: reply });
     return reply.trim();
+  }
+
+  /* Google Gemini's generateContent API — different shape from OpenAI:
+     history uses role "model" instead of "assistant", the system prompt
+     is a separate field, and the API key is a query param, not a
+     Bearer header. */
+  async function callGemini(userText, settings) {
+    conversationHistory.push({ role: 'user', content: userText });
+    trimHistory();
+
+    const systemPrompt = conversationHistory[0].content;
+    const contents = conversationHistory.slice(1).map((m) => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }]
+    }));
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(settings.model)}:generateContent?key=${encodeURIComponent(settings.apiKey)}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents,
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        generationConfig: { temperature: 0.7 }
+      })
+    });
+
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => '');
+      throw new Error(`API error ${res.status}: ${errBody.slice(0, 200) || res.statusText}`);
+    }
+
+    const data = await res.json();
+    const reply = data && data.candidates && data.candidates[0] && data.candidates[0].content &&
+      data.candidates[0].content.parts && data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text;
+    if (!reply) throw new Error('No response returned by the model.');
+    conversationHistory.push({ role: 'assistant', content: reply });
+    return reply.trim();
+  }
+
+  async function callAI(userText) {
+    const settings = loadAiSettings();
+    if (settings.provider === 'gemini') return callGemini(userText, settings);
+    return callOpenAiCompatible(userText, settings);
   }
 
   /* Speaks a reply aloud through the reactor core: real TTS audio plus a
