@@ -999,7 +999,14 @@
   function autoListenIfQuestion(text) {
     if (!recognition || !text.trim().endsWith('?')) return;
     ensureRecognitionRunning();
-    beginAwaitingCommand(false, "JARVIS asked a question — listening for your answer...");
+    beginAwaitingCommand("JARVIS asked a question — listening for your answer...");
+  }
+
+  /* Bare "Hey Jarvis" with no trailing request: JARVIS greets the user
+     out loud, then autoListenIfQuestion (triggered because the greeting
+     itself ends in "?") starts the timed listening window automatically. */
+  function respondToWakeWord() {
+    speakReply('What do you need help with today?');
   }
 
   let sending = false;
@@ -1068,7 +1075,12 @@
   let recognitionActive = false;
   let wakeWordEnabled = false;
   let awaitingCommand = false;
-  let awaitingTimeout = null;
+  let awaitingTimeout = null;   // hard cap: give up if nothing usable is heard at all
+  let silenceTimer = null;      // once speech starts, a pause this long ends the turn
+  let awaitingTranscript = '';  // latest (interim or final) transcript heard this turn
+
+  const AWAITING_MAX_MS = 40000;   // wait up to 40s total for a response
+  const AWAITING_SILENCE_MS = 3000; // then submit after 3s of silence following speech
 
   function setWakeToggleUI() {
     if (!wakeToggleBtn) return;
@@ -1078,24 +1090,51 @@
 
   function clearAwaitingCommand() {
     awaitingCommand = false;
+    awaitingTranscript = '';
     clearTimeout(awaitingTimeout);
     awaitingTimeout = null;
+    clearTimeout(silenceTimer);
+    silenceTimer = null;
     if (micBtn) micBtn.classList.remove('listening');
     setReactorState('idle');
   }
 
-  function beginAwaitingCommand(cueAloud, statusText) {
+  /* Ends the current listening turn: takes whatever transcript has been
+     heard so far (interim or final) and sends it as the response, or —
+     if nothing was said — just goes back to idle. */
+  function finalizeAwaitingCommand() {
+    const transcript = awaitingTranscript.trim();
+    clearAwaitingCommand();
+    if (transcript) {
+      sendChatMessage(transcript);
+    } else {
+      chatStatusEl.textContent = wakeWordEnabled ? 'Say "Hey Jarvis" any time.' : '';
+    }
+  }
+
+  /* Restarts the 3-second silence window. Called every time new speech
+     is heard while awaiting a response, so the turn only ends once the
+     user actually pauses for 3s — not merely because 3s have elapsed
+     since listening began. */
+  function resetSilenceTimer() {
+    clearTimeout(silenceTimer);
+    silenceTimer = setTimeout(() => {
+      if (awaitingCommand) finalizeAwaitingCommand();
+    }, AWAITING_SILENCE_MS);
+  }
+
+  function beginAwaitingCommand(statusText) {
     awaitingCommand = true;
+    awaitingTranscript = '';
     if (micBtn) micBtn.classList.add('listening');
     chatStatusEl.textContent = statusText || 'Listening for your question...';
     setReactorState('listening-state');
-    if (cueAloud) speak('YES?', { duration: 2000 });
+    clearTimeout(silenceTimer);
+    silenceTimer = null;
     clearTimeout(awaitingTimeout);
     awaitingTimeout = setTimeout(() => {
-      if (!awaitingCommand) return;
-      clearAwaitingCommand();
-      chatStatusEl.textContent = wakeWordEnabled ? 'Say "Hey Jarvis" any time.' : '';
-    }, 10000);
+      if (awaitingCommand) finalizeAwaitingCommand();
+    }, AWAITING_MAX_MS);
   }
 
   function ensureRecognitionRunning() {
@@ -1152,23 +1191,25 @@
     recognition.onresult = (e) => {
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const result = e.results[i];
-        if (!result.isFinal) continue;
         const transcript = result[0].transcript.trim();
-        if (!transcript) continue;
 
         if (awaitingCommand) {
-          clearAwaitingCommand();
-          sendChatMessage(transcript);
+          if (transcript) {
+            awaitingTranscript = transcript;
+            resetSilenceTimer(); // heard something — the 3s "are they done?" window restarts
+          }
+          if (result.isFinal && transcript) finalizeAwaitingCommand();
           continue;
         }
 
+        if (!result.isFinal || !transcript) continue;
         const match = transcript.match(WAKE_PHRASE_RE);
         if (!match) continue;
         const rest = transcript.slice(match.index + match[0].length).trim();
         if (rest.length > 1) {
           sendChatMessage(rest);
         } else {
-          beginAwaitingCommand(true);
+          respondToWakeWord();
         }
       }
     };
@@ -1180,7 +1221,7 @@
           return;
         }
         ensureRecognitionRunning();
-        beginAwaitingCommand(false);
+        beginAwaitingCommand();
       });
     }
 
