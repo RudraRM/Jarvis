@@ -819,7 +819,8 @@ body.darker-theme .panel { background: linear-gradient(135deg, rgba(10,16,30,0.7
   margin-bottom: 4px;
   margin-top: 12px;
 }
-.settings-box input {
+.settings-box input,
+.settings-box select {
   width: 100%;
   background: rgba(0,217,255,0.06);
   border: 1px solid rgba(0,217,255,0.3);
@@ -830,7 +831,24 @@ body.darker-theme .panel { background: linear-gradient(135deg, rgba(10,16,30,0.7
   border-radius: 6px;
   outline: none;
 }
-.settings-box input:focus { border-color: var(--cyan); box-shadow: 0 0 10px var(--cyan-dim); }
+.settings-box select {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--cyan) 50%), linear-gradient(135deg, var(--cyan) 50%, transparent 50%);
+  background-position: calc(100% - 18px) center, calc(100% - 13px) center;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+.settings-box select option { background: #10182f; color: var(--text); }
+.settings-box input:focus,
+.settings-box select:focus { border-color: var(--cyan); box-shadow: 0 0 10px var(--cyan-dim); }
+.settings-field { margin-top: 12px; }
+.settings-field label { margin-top: 0; }
+.settings-hint {
+  margin-top: 10px;
+  font-size: 0.7rem;
+  line-height: 1.5;
+  color: #6c85a8;
+}
 .settings-actions {
   display: flex;
   justify-content: flex-end;

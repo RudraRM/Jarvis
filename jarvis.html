@@ -255,18 +255,29 @@
     <h3>AI CONNECTION SETTINGS</h3>
     <p class="settings-note">
       This is a static, client-only site with no backend server. To have a real conversation,
-      JARVIS calls an OpenAI-compatible Chat Completions API directly from your browser using
-      your own API key. Your key is stored only in this browser's local storage and is sent
-      only to the API base URL below &mdash; never to any other server.
+      JARVIS calls your chosen AI provider directly from your browser using your own API key.
+      Your key is stored only in this browser's local storage and is sent only to that
+      provider &mdash; never to any other server.
     </p>
-    <label for="settings-baseurl">API Base URL</label>
-    <input type="text" id="settings-baseurl" placeholder="https://api.openai.com/v1">
+    <label for="settings-provider">AI Provider</label>
+    <select id="settings-provider">
+      <option value="openai">OpenAI</option>
+      <option value="groq">Groq</option>
+      <option value="gemini">Google Gemini</option>
+      <option value="custom">Custom (OpenAI-compatible)</option>
+    </select>
+
+    <div class="settings-field" id="baseurl-field">
+      <label for="settings-baseurl">API Base URL</label>
+      <input type="text" id="settings-baseurl" placeholder="https://api.openai.com/v1">
+    </div>
 
     <label for="settings-model">Model</label>
     <input type="text" id="settings-model" placeholder="gpt-4o-mini">
 
     <label for="settings-apikey">API Key</label>
     <input type="password" id="settings-apikey" placeholder="sk-...">
+    <p class="settings-hint" id="settings-provider-hint"></p>
 
     <div class="settings-actions">
       <button id="settings-clear-btn" class="hud-btn danger-btn">CLEAR KEY</button>
