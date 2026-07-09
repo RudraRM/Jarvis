@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="jarvis.css">
 </head>
-<body>
+<body class="darker-theme">
 
 <canvas id="particle-canvas"></canvas>
 <div class="scanline-overlay"></div>
@@ -89,7 +89,7 @@
     <aside class="sidebar left-sidebar" id="left-sidebar">
       <div class="panel metric-card" data-detail="Core temperature nominal. Thermal regulators operating within safe range.">
         <div class="panel-label">TEMPERATURE</div>
-        <div class="panel-value"><span class="count" id="metric-temp">30</span>&deg;C</div>
+        <div class="panel-value"><span class="count" id="metric-temp">86</span>&deg;F</div>
       </div>
 
       <div class="panel metric-card" data-detail="Arc reactor output stable. No power fluctuations detected.">
@@ -131,38 +131,44 @@
 
     <!-- Arc Reactor Center -->
     <div class="reactor-wrap">
-      <!-- Decorative HUD dial (non-interactive; ticks/arc/spokes injected by JS) -->
-      <div class="hud-dial" id="hud-dial" aria-hidden="true"></div>
+      <!-- Core + rings + HUD dial share one group so the "guard lines"
+           (rings/ticks) move together with the core, in lockstep, when
+           JARVIS is speaking — rather than animating separately and
+           risking drifting out of sync. -->
+      <div class="reactor-core-group" id="reactor-core-group">
+        <!-- Decorative HUD dial (non-interactive; ticks/arc/spokes injected by JS) -->
+        <div class="hud-dial" id="hud-dial" aria-hidden="true"></div>
 
-      <div class="reactor-ring ring-outer"></div>
-      <div class="reactor-ring ring-mid"></div>
-      <div class="reactor-ring ring-inner"></div>
+        <div class="reactor-ring ring-outer"></div>
+        <div class="reactor-ring ring-mid"></div>
+        <div class="reactor-ring ring-inner"></div>
+
+        <div class="reactor-core" id="reactor-core">
+          <svg viewBox="0 0 200 200" class="reactor-triangle heart-svg" aria-hidden="true">
+            <defs>
+              <radialGradient id="coreGlow" cx="50%" cy="42%" r="65%">
+                <stop offset="0%" stop-color="#ffffff"/>
+                <stop offset="45%" stop-color="#aef9ff"/>
+                <stop offset="100%" stop-color="#00d9ff" stop-opacity="0.2"/>
+              </radialGradient>
+            </defs>
+            <polygon class="heart-hex" points="100,8 166,50 166,132 100,192 34,132 34,50"/>
+            <polygon class="heart-hex-inner" points="100,28 148,58 148,124 100,168 52,124 52,58"/>
+            <circle class="heart-node" cx="100" cy="8" r="4"/>
+            <circle class="heart-node" cx="166" cy="50" r="4"/>
+            <circle class="heart-node" cx="166" cy="132" r="4"/>
+            <circle class="heart-node" cx="100" cy="192" r="4"/>
+            <circle class="heart-node" cx="34" cy="132" r="4"/>
+            <circle class="heart-node" cx="34" cy="50" r="4"/>
+            <polygon class="heart-triangle" points="100,152 146,72 54,72"/>
+            <polygon class="heart-triangle-inner" points="100,124 129,76 71,76"/>
+          </svg>
+        </div>
+      </div>
 
       <div class="orbit-indicator oi-1"><span class="oi-val" id="oi-1">87%</span></div>
       <div class="orbit-indicator oi-2"><span class="oi-val" id="oi-2">64%</span></div>
       <div class="orbit-indicator oi-3"><span class="oi-val" id="oi-3">99%</span></div>
-
-      <div class="reactor-core" id="reactor-core">
-        <svg viewBox="0 0 200 200" class="reactor-triangle heart-svg" aria-hidden="true">
-          <defs>
-            <radialGradient id="coreGlow" cx="50%" cy="42%" r="65%">
-              <stop offset="0%" stop-color="#ffffff"/>
-              <stop offset="45%" stop-color="#aef9ff"/>
-              <stop offset="100%" stop-color="#00d9ff" stop-opacity="0.2"/>
-            </radialGradient>
-          </defs>
-          <polygon class="heart-hex" points="100,8 166,50 166,132 100,192 34,132 34,50"/>
-          <polygon class="heart-hex-inner" points="100,28 148,58 148,124 100,168 52,124 52,58"/>
-          <circle class="heart-node" cx="100" cy="8" r="4"/>
-          <circle class="heart-node" cx="166" cy="50" r="4"/>
-          <circle class="heart-node" cx="166" cy="132" r="4"/>
-          <circle class="heart-node" cx="100" cy="192" r="4"/>
-          <circle class="heart-node" cx="34" cy="132" r="4"/>
-          <circle class="heart-node" cx="34" cy="50" r="4"/>
-          <polygon class="heart-triangle" points="100,152 146,72 54,72"/>
-          <polygon class="heart-triangle-inner" points="100,124 129,76 71,76"/>
-        </svg>
-      </div>
 
       <div class="voice-feedback" id="voice-feedback">SYSTEM ONLINE</div>
     </div>
