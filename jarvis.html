@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>J.A.R.V.I.S | Stark Industries</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="jarvis.css">
+</head>
+<body>
+
+<canvas id="particle-canvas"></canvas>
+<div class="scanline-overlay"></div>
+
+<!-- ============ PAGE 1 : LANDING ============ -->
+<section id="landing-page" class="page active-page">
+  <div class="grid-bg"></div>
+  <div class="tech-lines">
+    <span class="tline t1"></span>
+    <span class="tline t2"></span>
+    <span class="tline t3"></span>
+    <span class="tline t4"></span>
+  </div>
+
+  <div class="landing-content">
+    <h1 class="jarvis-title" data-text="J.A.R.V.I.S">J.A.R.V.I.S</h1>
+    <p class="jarvis-subtitle">Just A Rather Very Intelligent System</p>
+    <p class="jarvis-desc">
+      An adaptive artificial intelligence framework built for real-time monitoring,
+      holographic visualization, and full system integration &mdash; engineered in the
+      spirit of Stark Industries.
+    </p>
+
+    <button id="init-btn" class="init-btn">
+      <span class="init-btn-text">INITIALIZE SYSTEM</span>
+      <span class="init-ripple"></span>
+    </button>
+
+    <div class="features-grid">
+      <div class="feature-card" style="--d:0">
+        <div class="feature-icon">&#9889;</div>
+        <h3>Advanced AI</h3>
+        <p>Neural processing tuned for real-time decision making.</p>
+      </div>
+      <div class="feature-card" style="--d:1">
+        <div class="feature-icon">&#128225;</div>
+        <h3>Real-time Monitoring</h3>
+        <p>Continuous diagnostics across every connected subsystem.</p>
+      </div>
+      <div class="feature-card" style="--d:2">
+        <div class="feature-icon">&#128260;</div>
+        <h3>Holographic Interface</h3>
+        <p>Immersive HUD visuals rendered directly in-browser.</p>
+      </div>
+      <div class="feature-card" style="--d:3">
+        <div class="feature-icon">&#128737;</div>
+        <h3>System Integration</h3>
+        <p>Seamless linkage across power, defense, and comms grids.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ TRANSITION OVERLAY ============ -->
+<div id="transition-overlay" class="transition-overlay">
+  <div class="transition-text" id="transition-text">INITIALIZING...</div>
+  <div class="transition-bar-track">
+    <div class="transition-bar-fill" id="transition-bar-fill"></div>
+  </div>
+</div>
+
+<!-- ============ PAGE 2 : DASHBOARD ============ -->
+<section id="dashboard-page" class="page">
+  <div class="grid-bg dashboard-grid"></div>
+
+  <!-- Top Bar -->
+  <header class="top-bar">
+    <div class="brand">STARK INDUSTRIES<span class="brand-sub">JARVIS OS v12.6</span></div>
+    <div class="status-pill"><span class="status-dot"></span> ONLINE</div>
+    <button id="exit-btn" class="exit-btn" title="Exit (E)">EXIT</button>
+  </header>
+
+  <div class="dashboard-body" id="dashboard-body">
+
+    <!-- Left Sidebar -->
+    <aside class="sidebar left-sidebar" id="left-sidebar">
+      <div class="panel metric-card" data-detail="Core temperature nominal. Thermal regulators operating within safe range.">
+        <div class="panel-label">TEMPERATURE</div>
+        <div class="panel-value"><span class="count" id="metric-temp">30</span>&deg;C</div>
+      </div>
+
+      <div class="panel metric-card" data-detail="Arc reactor output stable. No power fluctuations detected.">
+        <div class="panel-label">POWER LEVEL</div>
+        <div class="bar-track"><div class="bar-fill" id="power-bar" style="width:92%"></div></div>
+        <div class="panel-value small"><span class="count" id="power-pct">92</span>%</div>
+      </div>
+
+      <div class="panel metric-card" data-detail="All diagnostics green. No structural or systemic anomalies.">
+        <div class="panel-label">SYSTEM HEALTH</div>
+        <div class="panel-value"><span class="count" id="health-pct">98</span>%</div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-label">ACTIVE PROTOCOLS</div>
+        <ul class="protocol-list" id="protocol-list">
+          <li class="active">CLEAN SLATE</li>
+          <li class="active">HOUSE PARTY</li>
+          <li>VERONICA</li>
+          <li>MARK VII</li>
+        </ul>
+      </div>
+
+      <div class="panel">
+        <div class="panel-label">ALERTS</div>
+        <div id="alert-feed" class="alert-feed">
+          <div class="alert-item">All systems nominal.</div>
+        </div>
+      </div>
+
+      <div class="sidebar-buttons">
+        <button class="hud-btn" data-view="diagnostics">DIAGNOSTICS</button>
+        <button class="hud-btn" data-view="defense">DEFENSE GRID</button>
+        <button class="hud-btn" data-view="comms">COMMS</button>
+      </div>
+    </aside>
+
+    <!-- Arc Reactor Center -->
+    <div class="reactor-wrap">
+      <div class="reactor-ring ring-outer"></div>
+      <div class="reactor-ring ring-mid"></div>
+      <div class="reactor-ring ring-inner"></div>
+
+      <div class="orbit-indicator oi-1"><span class="oi-val" id="oi-1">87%</span></div>
+      <div class="orbit-indicator oi-2"><span class="oi-val" id="oi-2">64%</span></div>
+      <div class="orbit-indicator oi-3"><span class="oi-val" id="oi-3">99%</span></div>
+
+      <div class="reactor-core">
+        <svg viewBox="0 0 200 200" class="reactor-triangle">
+          <polygon points="100,30 165,155 35,155" />
+          <polygon points="100,60 145,145 55,145" class="tri-inner" />
+        </svg>
+      </div>
+
+      <div class="voice-feedback" id="voice-feedback">SYSTEM ONLINE</div>
+    </div>
+
+    <!-- Right Sidebar -->
+    <aside class="sidebar right-sidebar" id="right-sidebar">
+      <div class="panel">
+        <div class="panel-label">LOCAL TIME</div>
+        <div class="clock" id="clock">00:00:00</div>
+        <div class="date-display" id="date-display">--</div>
+      </div>
+
+      <div class="panel metric-card" data-detail="Session uptime since last system initialization.">
+        <div class="panel-label">UPTIME</div>
+        <div class="panel-value mono" id="uptime">00:00:00</div>
+      </div>
+
+      <div class="panel metric-card" data-detail="Network link stable. Latency within acceptable thresholds.">
+        <div class="panel-label">NETWORK</div>
+        <div class="panel-value ok" id="network-status">SECURE LINK</div>
+      </div>
+
+      <div class="panel metric-card" data-detail="Processing load distributed across all cores.">
+        <div class="panel-label">CPU LOAD</div>
+        <div class="bar-track"><div class="bar-fill" id="cpu-bar" style="width:41%"></div></div>
+        <div class="panel-value small"><span class="count" id="cpu-pct">41</span>%</div>
+      </div>
+
+      <div class="panel metric-card" data-detail="Memory buffers operating with sufficient headroom.">
+        <div class="panel-label">MEMORY</div>
+        <div class="bar-track"><div class="bar-fill" id="mem-bar" style="width:57%"></div></div>
+        <div class="panel-value small"><span class="count" id="mem-pct">57</span>%</div>
+      </div>
+
+      <button id="theme-toggle" class="hud-btn">TOGGLE DARKER THEME</button>
+    </aside>
+  </div>
+
+  <!-- Bottom Status Bar -->
+  <footer class="bottom-bar">
+    <div>MARK VII &mdash; OPERATIONAL</div>
+    <div id="bottom-clock">00:00:00</div>
+    <div>USER: A. STARK &nbsp;|&nbsp; ACCESS: FULL</div>
+    <div class="hint">Press <b>E</b> Exit &nbsp; <b>R</b> Reset &nbsp; <b>S</b> Sidebars</div>
+  </footer>
+</section>
+
+<div id="shutdown-overlay" class="transition-overlay">
+  <div class="transition-text">SYSTEM SHUTDOWN</div>
+  <div class="transition-bar-track">
+    <div class="transition-bar-fill" id="shutdown-bar-fill"></div>
+  </div>
+</div>
+
+<script src="jarvis.js"></script>
+</body>
+</html>
