@@ -995,9 +995,12 @@
   }
 
   /* Defined further down (voice recognition section); referenced here via
-     hoisting. Only kicks in when speech recognition is actually available. */
+     hoisting. Only kicks in when speech recognition is actually available,
+     and not if a previous listening window timed out with no response —
+     that lockout (needsWakeWord) only lifts once the user says "Hey
+     Jarvis" again or manually taps the mic. */
   function autoListenIfQuestion(text) {
-    if (!recognition || !text.trim().endsWith('?')) return;
+    if (!recognition || needsWakeWord || !text.trim().endsWith('?')) return;
     ensureRecognitionRunning();
     beginAwaitingCommand("JARVIS asked a question — listening for your answer...");
   }
@@ -1078,6 +1081,8 @@
   let awaitingTimeout = null;   // hard cap: give up if nothing usable is heard at all
   let silenceTimer = null;      // once speech starts, a pause this long ends the turn
   let awaitingTranscript = '';  // latest (interim or final) transcript heard this turn
+  let needsWakeWord = false;    // set once a listening window times out with no response;
+                                 // blocks auto-listen until "Hey Jarvis" (or the mic button) is used again
 
   const AWAITING_MAX_MS = 40000;   // wait up to 40s total for a response
   const AWAITING_SILENCE_MS = 3000; // then submit after 3s of silence following speech
@@ -1100,15 +1105,18 @@
   }
 
   /* Ends the current listening turn: takes whatever transcript has been
-     heard so far (interim or final) and sends it as the response, or —
-     if nothing was said — just goes back to idle. */
+     heard so far (interim or final) and sends it as the response. If
+     nothing was said at all before the 40s cap, JARVIS goes silent and
+     won't listen again on its own — only "Hey Jarvis" or the mic button
+     can re-engage it from here. */
   function finalizeAwaitingCommand() {
     const transcript = awaitingTranscript.trim();
     clearAwaitingCommand();
     if (transcript) {
       sendChatMessage(transcript);
     } else {
-      chatStatusEl.textContent = wakeWordEnabled ? 'Say "Hey Jarvis" any time.' : '';
+      needsWakeWord = true;
+      chatStatusEl.textContent = wakeWordEnabled ? 'Say "Hey Jarvis" to continue.' : '';
     }
   }
 
@@ -1205,6 +1213,7 @@
         if (!result.isFinal || !transcript) continue;
         const match = transcript.match(WAKE_PHRASE_RE);
         if (!match) continue;
+        needsWakeWord = false; // heard "Hey Jarvis" — lifts any lockout from a prior timeout
         const rest = transcript.slice(match.index + match[0].length).trim();
         if (rest.length > 1) {
           sendChatMessage(rest);
@@ -1220,6 +1229,7 @@
           clearAwaitingCommand();
           return;
         }
+        needsWakeWord = false; // an explicit tap re-engages JARVIS same as saying the wake phrase
         ensureRecognitionRunning();
         beginAwaitingCommand();
       });
@@ -1230,6 +1240,7 @@
         wakeWordEnabled = !wakeWordEnabled;
         setWakeToggleUI();
         if (wakeWordEnabled) {
+          needsWakeWord = false;
           ensureRecognitionRunning();
           chatStatusEl.textContent = 'Wake word engaged. Say "Hey Jarvis" any time.';
           speak('WAKE WORD ENGAGED');
