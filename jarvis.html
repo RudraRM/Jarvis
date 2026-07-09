@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="J.A.R.V.I.S. — an Iron Man-inspired AI dashboard with real voice/AI chat and a live internet speed test.">
 <title>J.A.R.V.I.S | Stark Industries</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -123,6 +124,7 @@
         <button class="hud-btn" data-view="diagnostics">DIAGNOSTICS</button>
         <button class="hud-btn" data-view="defense">DEFENSE GRID</button>
         <button class="hud-btn" data-view="comms">COMMS</button>
+        <button class="hud-btn" id="chat-toggle-btn">VOICE CHAT</button>
       </div>
     </aside>
 
@@ -159,9 +161,21 @@
         <div class="panel-value mono" id="uptime">00:00:00</div>
       </div>
 
-      <div class="panel metric-card" data-detail="Network link stable. Latency within acceptable thresholds.">
+      <div class="panel metric-card" data-detail="Live network connection status, reported by the browser.">
         <div class="panel-label">NETWORK</div>
-        <div class="panel-value ok" id="network-status">SECURE LINK</div>
+        <div class="panel-value ok" id="network-status">CHECKING...</div>
+      </div>
+
+      <div class="panel" id="speedtest-panel">
+        <div class="panel-label">CONNECTION SPEED TEST</div>
+        <div class="speedtest-results">
+          <div class="st-row"><span>PING</span><span id="st-ping">--</span></div>
+          <div class="st-row"><span>DOWNLOAD</span><span id="st-download">--</span></div>
+          <div class="st-row"><span>UPLOAD</span><span id="st-upload">--</span></div>
+        </div>
+        <div class="speedtest-bar-track"><div class="speedtest-bar-fill" id="speedtest-bar-fill"></div></div>
+        <button id="speedtest-btn" class="hud-btn">RUN SPEED TEST</button>
+        <div class="speedtest-status" id="speedtest-status"></div>
       </div>
 
       <div class="panel metric-card" data-detail="Processing load distributed across all cores.">
@@ -193,6 +207,51 @@
   <div class="transition-text">SYSTEM SHUTDOWN</div>
   <div class="transition-bar-track">
     <div class="transition-bar-fill" id="shutdown-bar-fill"></div>
+  </div>
+</div>
+
+<!-- ============ VOICE / CHAT PANEL ============ -->
+<div id="chat-panel" class="chat-panel">
+  <div class="chat-header">
+    <span>J.A.R.V.I.S VOICE INTERFACE</span>
+    <div class="chat-header-actions">
+      <button id="chat-settings-btn" class="chat-icon-btn" title="AI connection settings">&#9881;</button>
+      <button id="chat-close-btn" class="chat-icon-btn" title="Close">&times;</button>
+    </div>
+  </div>
+  <div class="chat-messages" id="chat-messages"></div>
+  <div class="chat-input-row">
+    <button id="mic-btn" class="mic-btn" title="Speak to JARVIS">&#127908;</button>
+    <input type="text" id="chat-input" placeholder="Type or speak your message..." autocomplete="off">
+    <button id="chat-send-btn" class="hud-btn">SEND</button>
+  </div>
+  <div class="chat-status" id="chat-status">Configure an AI provider in settings to enable real conversation.</div>
+</div>
+
+<!-- ============ AI SETTINGS MODAL ============ -->
+<div id="settings-modal" class="settings-modal">
+  <div class="settings-box">
+    <h3>AI CONNECTION SETTINGS</h3>
+    <p class="settings-note">
+      This is a static, client-only site with no backend server. To have a real conversation,
+      JARVIS calls an OpenAI-compatible Chat Completions API directly from your browser using
+      your own API key. Your key is stored only in this browser's local storage and is sent
+      only to the API base URL below &mdash; never to any other server.
+    </p>
+    <label for="settings-baseurl">API Base URL</label>
+    <input type="text" id="settings-baseurl" placeholder="https://api.openai.com/v1">
+
+    <label for="settings-model">Model</label>
+    <input type="text" id="settings-model" placeholder="gpt-4o-mini">
+
+    <label for="settings-apikey">API Key</label>
+    <input type="password" id="settings-apikey" placeholder="sk-...">
+
+    <div class="settings-actions">
+      <button id="settings-clear-btn" class="hud-btn danger-btn">CLEAR KEY</button>
+      <button id="settings-cancel-btn" class="hud-btn">CANCEL</button>
+      <button id="settings-save-btn" class="hud-btn">SAVE</button>
+    </div>
   </div>
 </div>
 
