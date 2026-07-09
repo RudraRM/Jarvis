@@ -300,6 +300,348 @@
     }
   });
 
+  /* ============ LIVE NETWORK STATUS ============ */
+  function updateNetworkStatus() {
+    const el = document.getElementById('network-status');
+    if (!el) return;
+    if (navigator.onLine) {
+      const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+      el.textContent = conn && conn.effectiveType ? `ONLINE (${conn.effectiveType.toUpperCase()})` : 'ONLINE';
+      el.classList.remove('warn');
+    } else {
+      el.textContent = 'OFFLINE';
+      el.classList.add('warn');
+    }
+  }
+  window.addEventListener('online', () => { updateNetworkStatus(); speak('NETWORK LINK RESTORED'); });
+  window.addEventListener('offline', () => { updateNetworkStatus(); speak('NETWORK LINK LOST'); });
+  updateNetworkStatus();
+
+  /* ============ CONNECTION SPEED TEST ============
+     Uses Cloudflare's public, CORS-enabled speed test endpoints
+     (the same ones used by @cloudflare/speedtest / speed.cloudflare.com)
+     to measure real ping, download, and upload throughput. */
+  const CF_DOWN_URL = 'https://speed.cloudflare.com/__down?bytes=';
+  const CF_UP_URL = 'https://speed.cloudflare.com/__up';
+
+  const speedtestBtn = document.getElementById('speedtest-btn');
+  const speedtestBarFill = document.getElementById('speedtest-bar-fill');
+  const speedtestStatus = document.getElementById('speedtest-status');
+  const stPingEl = document.getElementById('st-ping');
+  const stDownEl = document.getElementById('st-download');
+  const stUpEl = document.getElementById('st-upload');
+
+  function setSpeedtestProgress(pct) {
+    if (speedtestBarFill) speedtestBarFill.style.width = Math.max(0, Math.min(100, pct)) + '%';
+  }
+
+  async function measurePing(samples = 4) {
+    const times = [];
+    for (let i = 0; i < samples; i++) {
+      const start = performance.now();
+      await fetch(CF_DOWN_URL + '0', { cache: 'no-store', mode: 'cors' });
+      times.push(performance.now() - start);
+      setSpeedtestProgress((i + 1) / samples * 20);
+    }
+    times.sort((a, b) => a - b);
+    return times[Math.floor(times.length / 2)];
+  }
+
+  async function measureDownload(bytes = 15_000_000) {
+    const start = performance.now();
+    const res = await fetch(CF_DOWN_URL + bytes, { cache: 'no-store', mode: 'cors' });
+    const blob = await res.blob();
+    const durationSec = (performance.now() - start) / 1000;
+    setSpeedtestProgress(65);
+    const bits = blob.size * 8;
+    return bits / durationSec / 1_000_000; // Mbps
+  }
+
+  async function measureUpload(bytes = 4_000_000) {
+    const data = new Uint8Array(bytes);
+    crypto.getRandomValues(data.subarray(0, Math.min(65536, bytes)));
+    const start = performance.now();
+    await fetch(CF_UP_URL, { method: 'POST', body: data, cache: 'no-store', mode: 'cors' });
+    const durationSec = (performance.now() - start) / 1000;
+    setSpeedtestProgress(100);
+    const bits = bytes * 8;
+    return bits / durationSec / 1_000_000; // Mbps
+  }
+
+  let speedtestRunning = false;
+  async function runSpeedTest() {
+    if (speedtestRunning) return;
+    if (!navigator.onLine) {
+      speedtestStatus.textContent = 'No network connection detected.';
+      return;
+    }
+    speedtestRunning = true;
+    speedtestBtn.disabled = true;
+    stPingEl.textContent = '--';
+    stDownEl.textContent = '--';
+    stUpEl.textContent = '--';
+    setSpeedtestProgress(0);
+
+    try {
+      speedtestStatus.textContent = 'Measuring latency...';
+      const ping = await measurePing();
+      stPingEl.textContent = ping.toFixed(0) + ' ms';
+
+      speedtestStatus.textContent = 'Measuring download speed...';
+      const down = await measureDownload();
+      stDownEl.textContent = down.toFixed(1) + ' Mbps';
+
+      speedtestStatus.textContent = 'Measuring upload speed...';
+      const up = await measureUpload();
+      stUpEl.textContent = up.toFixed(1) + ' Mbps';
+
+      speedtestStatus.textContent = 'Test complete.';
+      speak('SPEED TEST COMPLETE. DOWNLOAD ' + down.toFixed(0) + ' MEGABITS PER SECOND.');
+    } catch (err) {
+      speedtestStatus.textContent = 'Speed test failed: ' + (err && err.message ? err.message : 'network error.');
+      setSpeedtestProgress(0);
+    } finally {
+      speedtestRunning = false;
+      speedtestBtn.disabled = false;
+    }
+  }
+
+  if (speedtestBtn) speedtestBtn.addEventListener('click', runSpeedTest);
+
+  /* ============ VOICE / AI CHAT ============
+     Real speech-to-text (Web Speech API), real text generation (a
+     user-configured OpenAI-compatible Chat Completions endpoint), and
+     real text-to-speech (SpeechSynthesis). No canned responses. */
+  const SETTINGS_KEY = 'jarvis_ai_settings_v1';
+  const chatPanel = document.getElementById('chat-panel');
+  const chatToggleBtn = document.getElementById('chat-toggle-btn');
+  const chatCloseBtn = document.getElementById('chat-close-btn');
+  const chatMessagesEl = document.getElementById('chat-messages');
+  const chatInput = document.getElementById('chat-input');
+  const chatSendBtn = document.getElementById('chat-send-btn');
+  const chatStatusEl = document.getElementById('chat-status');
+  const micBtn = document.getElementById('mic-btn');
+
+  const settingsModal = document.getElementById('settings-modal');
+  const chatSettingsBtn = document.getElementById('chat-settings-btn');
+  const settingsCancelBtn = document.getElementById('settings-cancel-btn');
+  const settingsSaveBtn = document.getElementById('settings-save-btn');
+  const settingsClearBtn = document.getElementById('settings-clear-btn');
+  const settingsBaseUrlInput = document.getElementById('settings-baseurl');
+  const settingsModelInput = document.getElementById('settings-model');
+  const settingsApiKeyInput = document.getElementById('settings-apikey');
+
+  function loadAiSettings() {
+    try {
+      const raw = localStorage.getItem(SETTINGS_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  }
+  function saveAiSettings(settings) {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  }
+  function aiConfigured() {
+    const s = loadAiSettings();
+    return !!(s.apiKey && s.baseUrl && s.model);
+  }
+
+  function openSettingsModal() {
+    const s = loadAiSettings();
+    settingsBaseUrlInput.value = s.baseUrl || 'https://api.openai.com/v1';
+    settingsModelInput.value = s.model || 'gpt-4o-mini';
+    settingsApiKeyInput.value = s.apiKey || '';
+    settingsModal.classList.add('open');
+  }
+  function closeSettingsModal() { settingsModal.classList.remove('open'); }
+
+  if (chatSettingsBtn) chatSettingsBtn.addEventListener('click', openSettingsModal);
+  if (settingsCancelBtn) settingsCancelBtn.addEventListener('click', closeSettingsModal);
+  if (settingsModal) {
+    settingsModal.addEventListener('click', (e) => { if (e.target === settingsModal) closeSettingsModal(); });
+  }
+  if (settingsSaveBtn) {
+    settingsSaveBtn.addEventListener('click', () => {
+      const baseUrl = settingsBaseUrlInput.value.trim().replace(/\/+$/, '');
+      const model = settingsModelInput.value.trim();
+      const apiKey = settingsApiKeyInput.value.trim();
+      if (!baseUrl || !model || !apiKey) {
+        chatStatusEl.textContent = 'Please fill in base URL, model, and API key to enable chat.';
+        closeSettingsModal();
+        return;
+      }
+      saveAiSettings({ baseUrl, model, apiKey });
+      closeSettingsModal();
+      chatStatusEl.textContent = 'AI connection configured. Ready to chat.';
+      addChatMessage('system', 'AI connection configured.');
+    });
+  }
+  if (settingsClearBtn) {
+    settingsClearBtn.addEventListener('click', () => {
+      localStorage.removeItem(SETTINGS_KEY);
+      settingsApiKeyInput.value = '';
+      chatStatusEl.textContent = 'API key cleared. Configure an AI provider in settings to enable real conversation.';
+      closeSettingsModal();
+    });
+  }
+
+  function addChatMessage(role, text) {
+    const div = document.createElement('div');
+    div.className = 'chat-msg ' + role;
+    div.textContent = text;
+    chatMessagesEl.appendChild(div);
+    chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+    return div;
+  }
+
+  let conversationHistory = [
+    { role: 'system', content: 'You are J.A.R.V.I.S., Tony Stark\'s AI assistant. Be concise, helpful, and a little witty.' }
+  ];
+
+  async function callAI(userText) {
+    const settings = loadAiSettings();
+    conversationHistory.push({ role: 'user', content: userText });
+    if (conversationHistory.length > 21) {
+      conversationHistory = [conversationHistory[0], ...conversationHistory.slice(-20)];
+    }
+
+    const res = await fetch(settings.baseUrl + '/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + settings.apiKey
+      },
+      body: JSON.stringify({
+        model: settings.model,
+        messages: conversationHistory,
+        temperature: 0.7
+      })
+    });
+
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => '');
+      throw new Error(`API error ${res.status}: ${errBody.slice(0, 200) || res.statusText}`);
+    }
+
+    const data = await res.json();
+    const reply = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+    if (!reply) throw new Error('No response returned by the model.');
+    conversationHistory.push({ role: 'assistant', content: reply });
+    return reply.trim();
+  }
+
+  function speakReply(text) {
+    if (!('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel();
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.rate = 1;
+    utter.pitch = 0.9;
+    window.speechSynthesis.speak(utter);
+  }
+
+  let sending = false;
+  async function sendChatMessage(text) {
+    text = (text || '').trim();
+    if (!text || sending) return;
+
+    addChatMessage('user', text);
+    chatInput.value = '';
+
+    if (!aiConfigured()) {
+      addChatMessage('system', 'No AI provider configured yet. Click the gear icon to add your API key and start a real conversation.');
+      chatStatusEl.textContent = 'AI not configured.';
+      openSettingsModal();
+      return;
+    }
+
+    sending = true;
+    chatSendBtn.disabled = true;
+    chatStatusEl.textContent = 'JARVIS is thinking...';
+    const thinkingEl = addChatMessage('system', 'Processing...');
+
+    try {
+      const reply = await callAI(text);
+      thinkingEl.remove();
+      addChatMessage('assistant', reply);
+      speakReply(reply);
+      speak('RESPONSE READY');
+      chatStatusEl.textContent = '';
+    } catch (err) {
+      thinkingEl.remove();
+      addChatMessage('error', 'Error: ' + (err && err.message ? err.message : 'request failed.'));
+      chatStatusEl.textContent = 'Request failed. Check your API settings and connection.';
+    } finally {
+      sending = false;
+      chatSendBtn.disabled = false;
+    }
+  }
+
+  if (chatToggleBtn) {
+    chatToggleBtn.addEventListener('click', () => {
+      chatPanel.classList.toggle('open');
+      if (chatPanel.classList.contains('open')) {
+        chatInput.focus();
+        speak('VOICE INTERFACE ENGAGED');
+      }
+    });
+  }
+  if (chatCloseBtn) chatCloseBtn.addEventListener('click', () => chatPanel.classList.remove('open'));
+  if (chatSendBtn) chatSendBtn.addEventListener('click', () => sendChatMessage(chatInput.value));
+  if (chatInput) {
+    chatInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') sendChatMessage(chatInput.value);
+    });
+  }
+
+  /* Speech recognition (voice input) */
+  const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let recognition = null;
+  let listening = false;
+
+  if (SpeechRecognitionCtor) {
+    recognition = new SpeechRecognitionCtor();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+
+    recognition.onstart = () => {
+      listening = true;
+      micBtn.classList.add('listening');
+      chatStatusEl.textContent = 'Listening...';
+    };
+    recognition.onend = () => {
+      listening = false;
+      micBtn.classList.remove('listening');
+    };
+    recognition.onerror = (e) => {
+      listening = false;
+      micBtn.classList.remove('listening');
+      chatStatusEl.textContent = 'Microphone error: ' + e.error;
+    };
+    recognition.onresult = (e) => {
+      const transcript = e.results[0][0].transcript;
+      sendChatMessage(transcript);
+    };
+
+    if (micBtn) {
+      micBtn.addEventListener('click', () => {
+        if (listening) {
+          recognition.stop();
+          return;
+        }
+        try {
+          recognition.start();
+        } catch {
+          /* already started */
+        }
+      });
+    }
+  } else if (micBtn) {
+    micBtn.disabled = true;
+    micBtn.title = 'Speech recognition is not supported in this browser';
+  }
+
   /* prevent scroll jank on dashboard page background */
   landingPage.style.opacity = '1';
 })();
