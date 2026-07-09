@@ -751,12 +751,15 @@
 
   /* Speaks a reply aloud through the reactor core: real TTS audio plus a
      live caption under the core, with the core itself pulsing while it
-     talks — this is the "conversation", there is no message log. */
+     talks — this is the "conversation", there is no message log. If the
+     reply is itself a question, JARVIS starts listening for the answer
+     the moment it stops talking — no "Hey Jarvis" or mic tap needed. */
   function speakReply(text) {
     speak(text, { duration: captionDuration(text) });
 
     if (!('speechSynthesis' in window)) {
       setReactorState('idle');
+      autoListenIfQuestion(text);
       return;
     }
     window.speechSynthesis.cancel();
@@ -764,9 +767,20 @@
     utter.rate = 1;
     utter.pitch = 0.9;
     utter.onstart = () => setReactorState('speaking');
-    utter.onend = () => setReactorState('idle');
+    utter.onend = () => {
+      setReactorState('idle');
+      autoListenIfQuestion(text);
+    };
     utter.onerror = () => setReactorState('idle');
     window.speechSynthesis.speak(utter);
+  }
+
+  /* Defined further down (voice recognition section); referenced here via
+     hoisting. Only kicks in when speech recognition is actually available. */
+  function autoListenIfQuestion(text) {
+    if (!recognition || !text.trim().endsWith('?')) return;
+    ensureRecognitionRunning();
+    beginAwaitingCommand(false, "JARVIS asked a question — listening for your answer...");
   }
 
   let sending = false;
@@ -851,10 +865,10 @@
     setReactorState('idle');
   }
 
-  function beginAwaitingCommand(cueAloud) {
+  function beginAwaitingCommand(cueAloud, statusText) {
     awaitingCommand = true;
     if (micBtn) micBtn.classList.add('listening');
-    chatStatusEl.textContent = 'Listening for your question...';
+    chatStatusEl.textContent = statusText || 'Listening for your question...';
     setReactorState('listening-state');
     if (cueAloud) speak('YES?', { duration: 2000 });
     clearTimeout(awaitingTimeout);
@@ -862,7 +876,7 @@
       if (!awaitingCommand) return;
       clearAwaitingCommand();
       chatStatusEl.textContent = wakeWordEnabled ? 'Say "Hey Jarvis" any time.' : '';
-    }, 8000);
+    }, 10000);
   }
 
   function ensureRecognitionRunning() {
