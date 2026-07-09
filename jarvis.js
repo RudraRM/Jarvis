@@ -187,7 +187,7 @@
   }
 
   let state = {
-    temp: 30, power: 92, health: 98, cpu: 41, mem: 57,
+    temp: 86, power: 92, health: 98, cpu: 41, mem: 57, // temp in Fahrenheit
     oi1: 87, oi2: 64, oi3: 99
   };
 
@@ -204,7 +204,7 @@
   }
 
   function tickMetrics() {
-    applyMetric('metric-temp', 'temp', 24, 38, 2);
+    applyMetric('metric-temp', 'temp', 75, 100, 4); // Fahrenheit (was 24-38 Celsius)
     applyMetric('power-pct', 'power', 70, 100, 4, 'power-bar');
     applyMetric('health-pct', 'health', 88, 100, 2);
     applyMetric('cpu-pct', 'cpu', 15, 85, 8, 'cpu-bar');
@@ -278,11 +278,28 @@
     });
   });
 
-  /* theme toggle */
+  /* theme toggle — the dark theme is the default (set on <body> in HTML);
+     the standard theme is the alternate, opt-in option, remembered across
+     visits. */
+  const THEME_KEY = 'jarvis_theme_v1';
   const themeToggle = document.getElementById('theme-toggle');
+
+  function updateThemeToggleLabel() {
+    const isDarker = document.body.classList.contains('darker-theme');
+    themeToggle.textContent = isDarker ? 'TOGGLE STANDARD THEME' : 'TOGGLE DARKER THEME';
+  }
+
+  if (localStorage.getItem(THEME_KEY) === 'standard') {
+    document.body.classList.remove('darker-theme');
+  }
+  updateThemeToggleLabel();
+
   themeToggle.addEventListener('click', () => {
     document.body.classList.toggle('darker-theme');
-    speak(document.body.classList.contains('darker-theme') ? 'DARKER THEME ENGAGED' : 'STANDARD THEME RESTORED');
+    const isDarker = document.body.classList.contains('darker-theme');
+    localStorage.setItem(THEME_KEY, isDarker ? 'dark' : 'standard');
+    updateThemeToggleLabel();
+    speak(isDarker ? 'DARKER THEME ENGAGED' : 'STANDARD THEME RESTORED');
   });
 
   /* keyboard shortcuts */
@@ -294,7 +311,7 @@
     if (key === 'e') {
       goToLanding();
     } else if (key === 'r') {
-      state = { temp: 30, power: 92, health: 98, cpu: 41, mem: 57, oi1: 87, oi2: 64, oi3: 99 };
+      state = { temp: 86, power: 92, health: 98, cpu: 41, mem: 57, oi1: 87, oi2: 64, oi3: 99 };
       tickMetrics();
       speak('METRICS RESET');
     } else if (key === 's') {
@@ -377,11 +394,20 @@
 
   /* ============ REACTOR VOICE STATE ============ */
   const reactorCoreEl = document.getElementById('reactor-core');
+  const reactorGroupEl = document.getElementById('reactor-core-group');
   const stopJarvisBtn = document.getElementById('stop-jarvis-btn');
   function setReactorState(state) {
     if (!reactorCoreEl) return;
     reactorCoreEl.classList.remove('thinking', 'speaking', 'listening-state');
     if (state && state !== 'idle') reactorCoreEl.classList.add(state);
+    /* The core's own pulse/scale animation stays local to reactor-core;
+       the group (core + rings + HUD ticks) additionally gets the same
+       state class so the "speaking" movement carries the guard rings and
+       tick marks along with it, in perfect lockstep. */
+    if (reactorGroupEl) {
+      reactorGroupEl.classList.remove('thinking', 'speaking', 'listening-state');
+      if (state && state !== 'idle') reactorGroupEl.classList.add(state);
+    }
     if (stopJarvisBtn) stopJarvisBtn.disabled = state !== 'speaking';
   }
 
