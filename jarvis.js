@@ -244,6 +244,7 @@
     clockTimer = setInterval(updateClock, 1000);
     metricsTimer = setInterval(tickMetrics, 3000);
     alertTimer = setInterval(pushAlert, 8000);
+    if (typeof resumeWakeWordIfEnabled === 'function') resumeWakeWordIfEnabled();
   }
 
   function stopDashboard() {
@@ -251,6 +252,7 @@
     clearInterval(metricsTimer);
     clearInterval(alertTimer);
     uptimeStart = null;
+    if (typeof stopVoiceListening === 'function') stopVoiceListening();
   }
 
   /* metric card expand + hover detail (create detail text lazily) */
@@ -404,6 +406,7 @@
      to measure real ping, download, and upload throughput. */
   const CF_DOWN_URL = 'https://speed.cloudflare.com/__down?bytes=';
   const CF_UP_URL = 'https://speed.cloudflare.com/__up';
+  const SPEEDTEST_TIMEOUT_MS = 10000;
 
   const speedtestBtn = document.getElementById('speedtest-btn');
   const speedtestBarFill = document.getElementById('speedtest-bar-fill');
@@ -416,11 +419,32 @@
     if (speedtestBarFill) speedtestBarFill.style.width = Math.max(0, Math.min(100, pct)) + '%';
   }
 
+  /* Cache-bust so no proxy/CDN along the way ever serves a stale response
+     for what should be a fresh timing measurement. */
+  function cacheBust(url) {
+    return url + (url.includes('?') ? '&' : '?') + '_r=' + Math.random().toString(36).slice(2);
+  }
+
+  /* Bare fetch() has no timeout, so a blocked/hanging request (a
+     firewall or ad-blocker silently dropping the request, a dead
+     connection, etc.) used to leave the test spinning forever with no
+     feedback. Every request now aborts after SPEEDTEST_TIMEOUT_MS. */
+  async function fetchWithTimeout(url, options, timeoutMs = SPEEDTEST_TIMEOUT_MS) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(url, { ...options, signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   async function measurePing(samples = 4) {
     const times = [];
     for (let i = 0; i < samples; i++) {
       const start = performance.now();
-      await fetch(CF_DOWN_URL + '0', { cache: 'no-store', mode: 'cors' });
+      const res = await fetchWithTimeout(cacheBust(CF_DOWN_URL + '0'), { cache: 'no-store', mode: 'cors' }, 5000);
+      if (!res.ok) throw new Error('Ping endpoint returned ' + res.status);
       times.push(performance.now() - start);
       setSpeedtestProgress((i + 1) / samples * 20);
     }
@@ -428,9 +452,10 @@
     return times[Math.floor(times.length / 2)];
   }
 
-  async function measureDownload(bytes = 15_000_000) {
+  async function measureDownload(bytes = 10_000_000) {
     const start = performance.now();
-    const res = await fetch(CF_DOWN_URL + bytes, { cache: 'no-store', mode: 'cors' });
+    const res = await fetchWithTimeout(cacheBust(CF_DOWN_URL + bytes), { cache: 'no-store', mode: 'cors' });
+    if (!res.ok) throw new Error('Download endpoint returned ' + res.status);
     const blob = await res.blob();
     const durationSec = (performance.now() - start) / 1000;
     setSpeedtestProgress(65);
@@ -442,7 +467,8 @@
     const data = new Uint8Array(bytes);
     crypto.getRandomValues(data.subarray(0, Math.min(65536, bytes)));
     const start = performance.now();
-    await fetch(CF_UP_URL, { method: 'POST', body: data, cache: 'no-store', mode: 'cors' });
+    const res = await fetchWithTimeout(CF_UP_URL, { method: 'POST', body: data, cache: 'no-store', mode: 'cors' });
+    if (!res.ok) throw new Error('Upload endpoint returned ' + res.status);
     const durationSec = (performance.now() - start) / 1000;
     setSpeedtestProgress(100);
     const bits = bytes * 8;
@@ -469,7 +495,13 @@
       stPingEl.textContent = ping.toFixed(0) + ' ms';
 
       speedtestStatus.textContent = 'Measuring download speed...';
-      const down = await measureDownload();
+      let down;
+      try {
+        down = await measureDownload();
+      } catch (err) {
+        if (err.name === 'AbortError') throw err;
+        down = await measureDownload(2_000_000); // retry smaller in case the link is just slow
+      }
       stDownEl.textContent = down.toFixed(1) + ' Mbps';
 
       speedtestStatus.textContent = 'Measuring upload speed...';
@@ -479,7 +511,11 @@
       speedtestStatus.textContent = 'Test complete.';
       speak('SPEED TEST COMPLETE. DOWNLOAD ' + down.toFixed(0) + ' MEGABITS PER SECOND.');
     } catch (err) {
-      speedtestStatus.textContent = 'Speed test failed: ' + (err && err.message ? err.message : 'network error.');
+      const isAbort = err && err.name === 'AbortError';
+      speedtestStatus.textContent = isAbort
+        ? 'Speed test timed out. Your connection may be slow, or a firewall/ad-blocker is blocking speed.cloudflare.com.'
+        : 'Speed test failed: ' + (err && err.message ? err.message : 'network error.') +
+          ' An ad-blocker or firewall may be blocking speed.cloudflare.com.';
       setSpeedtestProgress(0);
     } finally {
       speedtestRunning = false;
@@ -784,55 +820,162 @@
     });
   }
 
-  /* Speech recognition (voice input) */
+  /* ============ SPEECH RECOGNITION + "HEY JARVIS" WAKE WORD ============
+     A single continuous recognition session listens in the background
+     once "Hey Jarvis" mode is enabled. Saying the wake phrase (optionally
+     followed immediately by a question, e.g. "Hey Jarvis, what's the
+     time?") answers out loud without ever opening the chat panel. The
+     mic button just fast-forwards straight into "awaiting a command" so
+     you don't have to say the wake phrase when the panel is already open. */
+  const WAKE_PHRASE_RE = /\bhey,?\s*jarvis\b[,.!?\s]*/i;
+  const wakeToggleBtn = document.getElementById('wake-toggle-btn');
+
   const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
   let recognition = null;
-  let listening = false;
+  let recognitionActive = false;
+  let wakeWordEnabled = false;
+  let awaitingCommand = false;
+  let awaitingTimeout = null;
+
+  function setWakeToggleUI() {
+    if (!wakeToggleBtn) return;
+    wakeToggleBtn.textContent = 'HEY JARVIS: ' + (wakeWordEnabled ? 'ON' : 'OFF');
+    wakeToggleBtn.classList.toggle('active-toggle', wakeWordEnabled);
+  }
+
+  function clearAwaitingCommand() {
+    awaitingCommand = false;
+    clearTimeout(awaitingTimeout);
+    awaitingTimeout = null;
+    if (micBtn) micBtn.classList.remove('listening');
+    setReactorState('idle');
+  }
+
+  function beginAwaitingCommand(cueAloud) {
+    awaitingCommand = true;
+    if (micBtn) micBtn.classList.add('listening');
+    chatStatusEl.textContent = 'Listening for your question...';
+    setReactorState('listening-state');
+    if (cueAloud) speak('YES?', { duration: 2000 });
+    clearTimeout(awaitingTimeout);
+    awaitingTimeout = setTimeout(() => {
+      if (!awaitingCommand) return;
+      clearAwaitingCommand();
+      chatStatusEl.textContent = wakeWordEnabled ? 'Say "Hey Jarvis" any time.' : '';
+    }, 8000);
+  }
+
+  function ensureRecognitionRunning() {
+    if (!recognition || recognitionActive) return;
+    try {
+      recognition.start();
+    } catch {
+      /* already started */
+    }
+  }
+
+  function stopVoiceListening() {
+    clearAwaitingCommand();
+    if (recognition && recognitionActive) recognition.stop();
+  }
+
+  function resumeWakeWordIfEnabled() {
+    if (wakeWordEnabled) ensureRecognitionRunning();
+  }
 
   if (SpeechRecognitionCtor) {
     recognition = new SpeechRecognitionCtor();
-    recognition.continuous = false;
-    recognition.interimResults = false;
+    recognition.continuous = true;
+    recognition.interimResults = true;
     recognition.lang = 'en-US';
 
     recognition.onstart = () => {
-      listening = true;
-      micBtn.classList.add('listening');
-      chatStatusEl.textContent = 'Listening...';
-      setReactorState('listening-state');
+      recognitionActive = true;
     };
+
     recognition.onend = () => {
-      listening = false;
-      micBtn.classList.remove('listening');
-      setReactorState('idle');
+      recognitionActive = false;
+      if (wakeWordEnabled || awaitingCommand) {
+        setTimeout(ensureRecognitionRunning, 300);
+      } else {
+        if (micBtn) micBtn.classList.remove('listening');
+        setReactorState('idle');
+      }
     };
+
     recognition.onerror = (e) => {
-      listening = false;
-      micBtn.classList.remove('listening');
-      setReactorState('idle');
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        wakeWordEnabled = false;
+        setWakeToggleUI();
+        clearAwaitingCommand();
+        chatStatusEl.textContent = 'Microphone access denied. Enable it to use voice.';
+        return;
+      }
+      if (e.error === 'no-speech' || e.error === 'aborted') return; // expected; onend auto-restarts
+      clearAwaitingCommand();
       chatStatusEl.textContent = 'Microphone error: ' + e.error;
     };
+
     recognition.onresult = (e) => {
-      const transcript = e.results[0][0].transcript;
-      sendChatMessage(transcript);
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const result = e.results[i];
+        if (!result.isFinal) continue;
+        const transcript = result[0].transcript.trim();
+        if (!transcript) continue;
+
+        if (awaitingCommand) {
+          clearAwaitingCommand();
+          sendChatMessage(transcript);
+          continue;
+        }
+
+        const match = transcript.match(WAKE_PHRASE_RE);
+        if (!match) continue;
+        const rest = transcript.slice(match.index + match[0].length).trim();
+        if (rest.length > 1) {
+          sendChatMessage(rest);
+        } else {
+          beginAwaitingCommand(true);
+        }
+      }
     };
 
     if (micBtn) {
       micBtn.addEventListener('click', () => {
-        if (listening) {
-          recognition.stop();
+        if (awaitingCommand) {
+          clearAwaitingCommand();
           return;
         }
-        try {
-          recognition.start();
-        } catch {
-          /* already started */
+        ensureRecognitionRunning();
+        beginAwaitingCommand(false);
+      });
+    }
+
+    if (wakeToggleBtn) {
+      wakeToggleBtn.addEventListener('click', () => {
+        wakeWordEnabled = !wakeWordEnabled;
+        setWakeToggleUI();
+        if (wakeWordEnabled) {
+          ensureRecognitionRunning();
+          chatStatusEl.textContent = 'Wake word engaged. Say "Hey Jarvis" any time.';
+          speak('WAKE WORD ENGAGED');
+        } else {
+          clearAwaitingCommand();
+          chatStatusEl.textContent = '';
+          speak('WAKE WORD DISENGAGED');
+          if (recognition && recognitionActive) recognition.stop();
         }
       });
     }
-  } else if (micBtn) {
-    micBtn.disabled = true;
-    micBtn.title = 'Speech recognition is not supported in this browser';
+  } else {
+    if (micBtn) {
+      micBtn.disabled = true;
+      micBtn.title = 'Speech recognition is not supported in this browser';
+    }
+    if (wakeToggleBtn) {
+      wakeToggleBtn.disabled = true;
+      wakeToggleBtn.title = 'Speech recognition is not supported in this browser';
+    }
   }
 
   /* prevent scroll jank on dashboard page background */
