@@ -377,10 +377,12 @@
 
   /* ============ REACTOR VOICE STATE ============ */
   const reactorCoreEl = document.getElementById('reactor-core');
+  const stopJarvisBtn = document.getElementById('stop-jarvis-btn');
   function setReactorState(state) {
     if (!reactorCoreEl) return;
     reactorCoreEl.classList.remove('thinking', 'speaking', 'listening-state');
     if (state && state !== 'idle') reactorCoreEl.classList.add(state);
+    if (stopJarvisBtn) stopJarvisBtn.disabled = state !== 'speaking';
   }
 
   /* ============ LIVE NETWORK STATUS ============ */
@@ -945,6 +947,12 @@
     window.speechSynthesis.speak(utter);
   }
 
+  /* Bumped on every new speakReply() call and by the "STOP RESPONSE"
+     button. Callbacks from a given speech attempt (premium audio ending,
+     browser TTS ending) check this before acting on it, so a stopped or
+     superseded utterance can never trigger auto-listen after the fact. */
+  let ttsGeneration = 0;
+
   /* Speaks a reply aloud through the reactor core: real TTS audio plus a
      live caption under the core, with the core itself pulsing while it
      talks — this is the "conversation", there is no message log. Uses a
@@ -954,6 +962,8 @@
      talking — no "Hey Jarvis" or mic tap needed. */
   async function speakReply(text) {
     speak(text, { duration: captionDuration(text) });
+    ttsGeneration++;
+    const myGen = ttsGeneration;
 
     if (currentTtsAudio) {
       currentTtsAudio.pause();
@@ -965,7 +975,9 @@
     if (ttsSettings.provider && ttsSettings.provider !== 'browser' && ttsSettings.apiKey) {
       try {
         const blob = await fetchPremiumTtsAudio(text, ttsSettings);
+        if (myGen !== ttsGeneration) return; // stopped or superseded while fetching
         await playAudioBlob(blob);
+        if (myGen !== ttsGeneration) return; // stopped mid-playback
         autoListenIfQuestion(text);
         return;
       } catch (err) {
@@ -973,7 +985,31 @@
       }
     }
 
-    speakWithBrowserVoice(text, () => autoListenIfQuestion(text));
+    if (myGen !== ttsGeneration) return;
+    speakWithBrowserVoice(text, () => {
+      if (myGen !== ttsGeneration) return;
+      autoListenIfQuestion(text);
+    });
+  }
+
+  /* Stops JARVIS mid-response: halts whatever is currently playing
+     (premium audio or browser speech synthesis) and cancels any pending
+     listen window, without triggering auto-listen for the interrupted
+     reply. */
+  function stopJarvisSpeaking() {
+    ttsGeneration++;
+    if (currentTtsAudio) {
+      currentTtsAudio.pause();
+      currentTtsAudio = null;
+    }
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    setReactorState('idle');
+    if (typeof clearAwaitingCommand === 'function') clearAwaitingCommand();
+    speak('RESPONSE STOPPED', { duration: 1500 });
+  }
+
+  if (stopJarvisBtn) {
+    stopJarvisBtn.addEventListener('click', stopJarvisSpeaking);
   }
 
   /* Speaks a short sample line with whatever settings are currently in

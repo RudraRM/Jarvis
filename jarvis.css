@@ -461,6 +461,8 @@ a, button { font-family: inherit; }
 }
 .hud-btn:hover { border-color: var(--cyan); box-shadow: 0 0 16px var(--cyan-dim); }
 .hud-btn.active-toggle { background: var(--cyan); color: #001a22; }
+.hud-btn:disabled { opacity: 0.35; cursor: not-allowed; box-shadow: none; }
+.hud-btn:disabled:hover { border-color: var(--cyan-dim); box-shadow: none; }
 
 .clock {
   font-family: 'Orbitron', sans-serif;
