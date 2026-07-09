@@ -139,11 +139,16 @@
   const voiceEl = document.getElementById('voice-feedback');
   let voiceTimeout = null;
 
-  function speak(msg) {
+  function speak(msg, opts) {
+    const duration = (opts && opts.duration) || 3500;
     voiceEl.textContent = msg;
     voiceEl.style.opacity = '1';
     clearTimeout(voiceTimeout);
-    voiceTimeout = setTimeout(() => { voiceEl.style.opacity = '0.5'; }, 3500);
+    voiceTimeout = setTimeout(() => { voiceEl.style.opacity = '0.5'; }, duration);
+  }
+
+  function captionDuration(text) {
+    return Math.min(15000, Math.max(3200, text.length * 65));
   }
 
   function pad(n) { return String(n).padStart(2, '0'); }
@@ -300,6 +305,82 @@
     }
   });
 
+  /* ============ DECORATIVE HUD DIAL (non-interactive) ============
+     Purely visual radar/gauge ring behind the reactor core. No event
+     listeners are attached to it or its children. */
+  function buildHudDial() {
+    const container = document.getElementById('hud-dial');
+    if (!container) return;
+    const svgNS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(svgNS, 'svg');
+    svg.setAttribute('viewBox', '0 0 400 400');
+    svg.setAttribute('class', 'hud-dial-svg');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.setAttribute('focusable', 'false');
+
+    const cx = 200, cy = 200, rOuter = 190;
+
+    [150, 172].forEach((r) => {
+      const c = document.createElementNS(svgNS, 'circle');
+      c.setAttribute('cx', cx);
+      c.setAttribute('cy', cy);
+      c.setAttribute('r', r);
+      c.setAttribute('class', 'hud-ring-faint');
+      svg.appendChild(c);
+    });
+
+    for (let deg = 0; deg < 360; deg += 6) {
+      const isMajor = deg % 30 === 0;
+      const rad = (deg * Math.PI) / 180;
+      const len = isMajor ? 18 : 9;
+      const x1 = cx + (rOuter - len) * Math.cos(rad);
+      const y1 = cy + (rOuter - len) * Math.sin(rad);
+      const x2 = cx + rOuter * Math.cos(rad);
+      const y2 = cy + rOuter * Math.sin(rad);
+      const line = document.createElementNS(svgNS, 'line');
+      line.setAttribute('x1', x1.toFixed(2));
+      line.setAttribute('y1', y1.toFixed(2));
+      line.setAttribute('x2', x2.toFixed(2));
+      line.setAttribute('y2', y2.toFixed(2));
+      line.setAttribute('class', 'hud-tick' + (isMajor ? ' major' : ''));
+      svg.appendChild(line);
+    }
+
+    const rArc = 180, startDeg = -55, endDeg = 15;
+    const sx = cx + rArc * Math.cos((startDeg * Math.PI) / 180);
+    const sy = cy + rArc * Math.sin((startDeg * Math.PI) / 180);
+    const ex = cx + rArc * Math.cos((endDeg * Math.PI) / 180);
+    const ey = cy + rArc * Math.sin((endDeg * Math.PI) / 180);
+    const arc = document.createElementNS(svgNS, 'path');
+    arc.setAttribute('d', `M ${sx.toFixed(2)} ${sy.toFixed(2)} A ${rArc} ${rArc} 0 0 1 ${ex.toFixed(2)} ${ey.toFixed(2)}`);
+    arc.setAttribute('class', 'hud-arc-accent');
+    svg.appendChild(arc);
+
+    [-90, 205, -15].forEach((deg) => {
+      const rad = (deg * Math.PI) / 180;
+      const x2 = cx + 140 * Math.cos(rad);
+      const y2 = cy + 140 * Math.sin(rad);
+      const line = document.createElementNS(svgNS, 'line');
+      line.setAttribute('x1', cx);
+      line.setAttribute('y1', cy);
+      line.setAttribute('x2', x2.toFixed(2));
+      line.setAttribute('y2', y2.toFixed(2));
+      line.setAttribute('class', 'hud-spoke');
+      svg.appendChild(line);
+    });
+
+    container.appendChild(svg);
+  }
+  buildHudDial();
+
+  /* ============ REACTOR VOICE STATE ============ */
+  const reactorCoreEl = document.getElementById('reactor-core');
+  function setReactorState(state) {
+    if (!reactorCoreEl) return;
+    reactorCoreEl.classList.remove('thinking', 'speaking', 'listening-state');
+    if (state && state !== 'idle') reactorCoreEl.classList.add(state);
+  }
+
   /* ============ LIVE NETWORK STATUS ============ */
   function updateNetworkStatus() {
     const el = document.getElementById('network-status');
@@ -416,7 +497,6 @@
   const chatPanel = document.getElementById('chat-panel');
   const chatToggleBtn = document.getElementById('chat-toggle-btn');
   const chatCloseBtn = document.getElementById('chat-close-btn');
-  const chatMessagesEl = document.getElementById('chat-messages');
   const chatInput = document.getElementById('chat-input');
   const chatSendBtn = document.getElementById('chat-send-btn');
   const chatStatusEl = document.getElementById('chat-status');
@@ -473,8 +553,8 @@
       }
       saveAiSettings({ baseUrl, model, apiKey });
       closeSettingsModal();
-      chatStatusEl.textContent = 'AI connection configured. Ready to chat.';
-      addChatMessage('system', 'AI connection configured.');
+      chatStatusEl.textContent = 'AI connection configured. Ready to talk.';
+      speak('AI CONNECTION CONFIGURED. READY TO TALK.');
     });
   }
   if (settingsClearBtn) {
@@ -482,17 +562,9 @@
       localStorage.removeItem(SETTINGS_KEY);
       settingsApiKeyInput.value = '';
       chatStatusEl.textContent = 'API key cleared. Configure an AI provider in settings to enable real conversation.';
+      speak('API KEY CLEARED.');
       closeSettingsModal();
     });
-  }
-
-  function addChatMessage(role, text) {
-    const div = document.createElement('div');
-    div.className = 'chat-msg ' + role;
-    div.textContent = text;
-    chatMessagesEl.appendChild(div);
-    chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
-    return div;
   }
 
   let conversationHistory = [
@@ -531,12 +603,23 @@
     return reply.trim();
   }
 
+  /* Speaks a reply aloud through the reactor core: real TTS audio plus a
+     live caption under the core, with the core itself pulsing while it
+     talks — this is the "conversation", there is no message log. */
   function speakReply(text) {
-    if (!('speechSynthesis' in window)) return;
+    speak(text, { duration: captionDuration(text) });
+
+    if (!('speechSynthesis' in window)) {
+      setReactorState('idle');
+      return;
+    }
     window.speechSynthesis.cancel();
     const utter = new SpeechSynthesisUtterance(text);
     utter.rate = 1;
     utter.pitch = 0.9;
+    utter.onstart = () => setReactorState('speaking');
+    utter.onend = () => setReactorState('idle');
+    utter.onerror = () => setReactorState('idle');
     window.speechSynthesis.speak(utter);
   }
 
@@ -545,12 +628,12 @@
     text = (text || '').trim();
     if (!text || sending) return;
 
-    addChatMessage('user', text);
     chatInput.value = '';
+    speak('YOU: ' + text, { duration: captionDuration(text) });
 
     if (!aiConfigured()) {
-      addChatMessage('system', 'No AI provider configured yet. Click the gear icon to add your API key and start a real conversation.');
       chatStatusEl.textContent = 'AI not configured.';
+      setTimeout(() => speak('NO AI PROVIDER CONFIGURED. OPEN SETTINGS TO CONNECT ME.', { duration: 5000 }), 1200);
       openSettingsModal();
       return;
     }
@@ -558,19 +641,16 @@
     sending = true;
     chatSendBtn.disabled = true;
     chatStatusEl.textContent = 'JARVIS is thinking...';
-    const thinkingEl = addChatMessage('system', 'Processing...');
+    setReactorState('thinking');
 
     try {
       const reply = await callAI(text);
-      thinkingEl.remove();
-      addChatMessage('assistant', reply);
-      speakReply(reply);
-      speak('RESPONSE READY');
       chatStatusEl.textContent = '';
+      speakReply(reply);
     } catch (err) {
-      thinkingEl.remove();
-      addChatMessage('error', 'Error: ' + (err && err.message ? err.message : 'request failed.'));
+      setReactorState('idle');
       chatStatusEl.textContent = 'Request failed. Check your API settings and connection.';
+      speak('ERROR: ' + (err && err.message ? err.message : 'REQUEST FAILED.'), { duration: 5000 });
     } finally {
       sending = false;
       chatSendBtn.disabled = false;
@@ -609,14 +689,17 @@
       listening = true;
       micBtn.classList.add('listening');
       chatStatusEl.textContent = 'Listening...';
+      setReactorState('listening-state');
     };
     recognition.onend = () => {
       listening = false;
       micBtn.classList.remove('listening');
+      setReactorState('idle');
     };
     recognition.onerror = (e) => {
       listening = false;
       micBtn.classList.remove('listening');
+      setReactorState('idle');
       chatStatusEl.textContent = 'Microphone error: ' + e.error;
     };
     recognition.onresult = (e) => {
