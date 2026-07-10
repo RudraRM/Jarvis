@@ -918,32 +918,38 @@
     link.href = url;
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
-    link.textContent = 'tap here if it didn\'t open';
-    link.style.color = 'var(--cyan)';
-    link.style.textDecoration = 'underline';
+    link.textContent = 'TAP HERE IF IT DID NOT OPEN';
     voiceEl.appendChild(text);
     voiceEl.appendChild(link);
     voiceEl.style.opacity = '1';
   }
 
   /* "Hey Jarvis, open <name>" site shortcuts. Add more by adding an entry
-     here — key is what the user says after "open", value is the URL. */
-  const VOICE_OPEN_SITES = {
-    youtube: { url: 'https://www.youtube.com', label: 'YouTube' },
-    entertainment: { url: 'https://www.streamex.net', label: 'Entertainment' }
-  };
+     here. `match` is tested against the whole utterance (after stripping
+     "hey jarvis"), so it's forgiving of real speech-to-text phrasing —
+     filler words ("can you open..."), "please", punctuation, and common
+     mis-transcriptions (e.g. "YouTube" heard as two words "you tube")
+     all still match, since we only need the keyword to appear somewhere
+     in the sentence, not the whole sentence to equal it exactly. */
+  const VOICE_OPEN_SITES = [
+    { url: 'https://www.youtube.com', label: 'YouTube', match: /you[\s-]*tube/ },
+    { url: 'https://www.streamex.net', label: 'Entertainment', match: /entertainment/ }
+  ];
+  const OPEN_VERB_RE = /\b(open|launch|start|go to|pull up|play)\b/;
 
   function tryHandleVoiceCommand(text) {
     // Strip a leading "hey jarvis" if it's still attached (e.g. typed
     // directly, rather than already stripped by the wake-word listener).
-    const t = text.trim().replace(WAKE_PHRASE_RE, '').trim().toLowerCase().replace(/[.!?]+$/, '');
-    const match = t.match(/^(?:open|launch|go to|pull up)\s+(.+)$/);
-    const site = match && VOICE_OPEN_SITES[match[1].trim()];
-    if (site) {
-      openUrlInNewTab(site.url);
-      speakReply('Opening ' + site.label + '.');
-      offerManualLink(site.url, 'OPENING ' + site.label.toUpperCase());
-      return true;
+    const t = text.trim().replace(WAKE_PHRASE_RE, '').trim().toLowerCase();
+    if (!OPEN_VERB_RE.test(t)) return false;
+
+    for (const site of VOICE_OPEN_SITES) {
+      if (site.match.test(t)) {
+        openUrlInNewTab(site.url);
+        speakReply('Opening ' + site.label + '. If it did not open automatically, tap the link on screen.');
+        offerManualLink(site.url, 'OPENING ' + site.label.toUpperCase());
+        return true;
+      }
     }
     return false;
   }
