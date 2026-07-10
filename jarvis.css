@@ -486,18 +486,13 @@ a, button { font-family: inherit; }
   align-items: center;
   justify-content: center;
 }
-/* While JARVIS speaks, the whole group (core + rings + HUD ticks) drifts
-   together as one unit, so the "guard lines" always stay exactly locked
-   to the core's position instead of animating separately and risking
-   drift. */
-.reactor-core-group.speaking { animation: reactorSpeakMove 1.6s ease-in-out infinite; }
-@keyframes reactorSpeakMove {
-  0%   { transform: translate(0, 0); }
-  20%  { transform: translate(4px, -3px); }
-  40%  { transform: translate(-4px, 2px); }
-  60%  { transform: translate(3px, 3px); }
-  80%  { transform: translate(-3px, -2px); }
-  100% { transform: translate(0, 0); }
+/* While JARVIS speaks, the HUD tick-mark ring sweeps forward (a steady
+   forward rotation) around the core for an active, radar-like feel. The
+   core and the reactor rings are untouched — only the tick lines move. */
+.reactor-core-group.speaking .hud-dial { animation: hudLinesForward 2.2s linear infinite; }
+@keyframes hudLinesForward {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }
 .reactor-ring {
   position: absolute;

@@ -132,9 +132,8 @@
     <!-- Arc Reactor Center -->
     <div class="reactor-wrap">
       <!-- Core + rings + HUD dial share one group so the "guard lines"
-           (rings/ticks) move together with the core, in lockstep, when
-           JARVIS is speaking — rather than animating separately and
-           risking drifting out of sync. -->
+           (the HUD tick marks) sweep forward around the core while JARVIS
+           is speaking, without touching the core or rings themselves. -->
       <div class="reactor-core-group" id="reactor-core-group">
         <!-- Decorative HUD dial (non-interactive; ticks/arc/spokes injected by JS) -->
         <div class="hud-dial" id="hud-dial" aria-hidden="true"></div>

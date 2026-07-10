@@ -401,9 +401,9 @@
     reactorCoreEl.classList.remove('thinking', 'speaking', 'listening-state');
     if (state && state !== 'idle') reactorCoreEl.classList.add(state);
     /* The core's own pulse/scale animation stays local to reactor-core;
-       the group (core + rings + HUD ticks) additionally gets the same
-       state class so the "speaking" movement carries the guard rings and
-       tick marks along with it, in perfect lockstep. */
+       the group additionally gets the same state class so the "speaking"
+       CSS can sweep the HUD tick marks forward around the core — the
+       core itself and the reactor rings are unaffected. */
     if (reactorGroupEl) {
       reactorGroupEl.classList.remove('thinking', 'speaking', 'listening-state');
       if (state && state !== 'idle') reactorGroupEl.classList.add(state);
