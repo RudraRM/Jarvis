@@ -569,30 +569,13 @@ a, button { font-family: inherit; }
 }
 .reactor-triangle { width: 68%; height: 68%; overflow: visible; }
 
-/* Arc-reactor "heart" */
-.heart-hex {
-  fill: rgba(0,217,255,0.06);
-  stroke: var(--cyan);
-  stroke-width: 3;
-  stroke-dasharray: 13 6;
-  filter: drop-shadow(0 0 10px var(--cyan));
-}
-.heart-hex-inner {
-  fill: none;
-  stroke: rgba(0,217,255,0.45);
-  stroke-width: 1.5;
-}
-.heart-node {
-  fill: var(--cyan);
-  filter: drop-shadow(0 0 6px var(--cyan));
-}
-.heart-triangle {
+/* Arc-reactor core fill: a soft light-blue gradient circle */
+.core-fill-circle {
   fill: url(#coreGlow);
   stroke: var(--cyan);
   stroke-width: 2;
   filter: drop-shadow(0 0 16px var(--cyan));
 }
-.heart-triangle-inner { fill: rgba(255,255,255,0.9); }
 
 /* Reactor voice states */
 .reactor-core.thinking { animation: corepulse 0.9s ease-in-out infinite; }
@@ -600,8 +583,7 @@ a, button { font-family: inherit; }
   border-color: var(--danger);
   animation: corepulse 1.1s ease-in-out infinite;
 }
-.reactor-core.listening-state .heart-hex,
-.reactor-core.listening-state .heart-triangle { stroke: var(--danger); }
+.reactor-core.listening-state .core-fill-circle { stroke: var(--danger); }
 .reactor-core.speaking { animation: reactorTalk 0.4s ease-in-out infinite; }
 @keyframes reactorTalk {
   0%, 100% { transform: scale(1); box-shadow: 0 0 40px var(--cyan), inset 0 0 30px rgba(0,217,255,0.4); }

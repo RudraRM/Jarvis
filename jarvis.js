@@ -253,6 +253,7 @@
     clearInterval(alertTimer);
     uptimeStart = null;
     if (typeof stopVoiceListening === 'function') stopVoiceListening();
+    if (typeof stopScreenShare === 'function') stopScreenShare();
   }
 
   /* metric card expand + hover detail (create detail text lazily) */
@@ -565,6 +566,7 @@
   const chatSendBtn = document.getElementById('chat-send-btn');
   const chatStatusEl = document.getElementById('chat-status');
   const micBtn = document.getElementById('mic-btn');
+  const screenShareBtn = document.getElementById('screen-share-btn');
 
   const settingsModal = document.getElementById('settings-modal');
   const chatSettingsBtn = document.getElementById('chat-settings-btn');
@@ -813,10 +815,21 @@
     }
   }
 
-  /* OpenAI-compatible Chat Completions (OpenAI, Groq, local servers, etc.) */
-  async function callOpenAiCompatible(userText, settings) {
+  /* OpenAI-compatible Chat Completions (OpenAI, Groq, local servers, etc.).
+     conversationHistory always keeps plain-text content (so trimHistory
+     and Gemini's mapping stay simple); a screen-share frame, if given, is
+     only ever attached to the outgoing request for THIS turn, as
+     multimodal message content — it's never persisted into history. */
+  async function callOpenAiCompatible(userText, settings, imageDataUrl) {
     conversationHistory.push({ role: 'user', content: userText });
     trimHistory();
+
+    const messages = conversationHistory.map((m, i) => {
+      if (imageDataUrl && i === conversationHistory.length - 1) {
+        return { role: m.role, content: [{ type: 'text', text: m.content }, { type: 'image_url', image_url: { url: imageDataUrl } }] };
+      }
+      return m;
+    });
 
     const res = await fetch(settings.baseUrl + '/chat/completions', {
       method: 'POST',
@@ -826,7 +839,7 @@
       },
       body: JSON.stringify({
         model: settings.model,
-        messages: conversationHistory,
+        messages,
         temperature: 0.7
       })
     });
@@ -846,16 +859,21 @@
   /* Google Gemini's generateContent API — different shape from OpenAI:
      history uses role "model" instead of "assistant", the system prompt
      is a separate field, and the API key is a query param, not a
-     Bearer header. */
-  async function callGemini(userText, settings) {
+     Bearer header. Same rule as above: an image is only ever attached to
+     this turn's outgoing request, never stored in conversationHistory. */
+  async function callGemini(userText, settings, imageDataUrl) {
     conversationHistory.push({ role: 'user', content: userText });
     trimHistory();
 
     const systemPrompt = conversationHistory[0].content;
-    const contents = conversationHistory.slice(1).map((m) => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content }]
-    }));
+    const historyTurns = conversationHistory.slice(1);
+    const contents = historyTurns.map((m, i) => {
+      const parts = [{ text: m.content }];
+      if (imageDataUrl && i === historyTurns.length - 1) {
+        parts.push({ inlineData: { mimeType: 'image/jpeg', data: imageDataUrl.split(',')[1] } });
+      }
+      return { role: m.role === 'assistant' ? 'model' : 'user', parts };
+    });
 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(settings.model)}:generateContent?key=${encodeURIComponent(settings.apiKey)}`;
     const res = await fetch(url, {
@@ -881,10 +899,77 @@
     return reply.trim();
   }
 
-  async function callAI(userText) {
+  async function callAI(userText, imageDataUrl) {
     const settings = loadAiSettings();
-    if (settings.provider === 'gemini') return callGemini(userText, settings);
-    return callOpenAiCompatible(userText, settings);
+    if (settings.provider === 'gemini') return callGemini(userText, settings, imageDataUrl);
+    return callOpenAiCompatible(userText, settings, imageDataUrl);
+  }
+
+  /* ============ SCREEN SHARE ============
+     Lets JARVIS "see" the screen: once sharing is on, every question
+     (however it's asked — "Hey Jarvis", the mic button, or typed) grabs
+     a fresh frame from the shared screen and sends it to the AI
+     alongside the question, so it can help with whatever's on screen. */
+  let screenStream = null;
+  let screenVideoEl = null;
+
+  function setScreenShareUI(active) {
+    if (!screenShareBtn) return;
+    screenShareBtn.textContent = 'SCREEN SHARE: ' + (active ? 'ON' : 'OFF');
+    screenShareBtn.classList.toggle('active-toggle', active);
+  }
+
+  function stopScreenShare() {
+    if (screenStream) screenStream.getTracks().forEach((t) => t.stop());
+    screenStream = null;
+    screenVideoEl = null;
+    setScreenShareUI(false);
+  }
+
+  async function startScreenShare() {
+    try {
+      screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+      const video = document.createElement('video');
+      video.srcObject = screenStream;
+      video.muted = true;
+      await video.play();
+      screenVideoEl = video;
+      screenStream.getVideoTracks()[0].addEventListener('ended', stopScreenShare); // user stopped sharing via the browser's own UI
+      setScreenShareUI(true);
+      chatStatusEl.textContent = 'Screen sharing active. Say "Hey Jarvis" for help with what\'s on screen.';
+      speak('SCREEN SHARING ENGAGED. I CAN SEE YOUR SCREEN NOW.');
+    } catch {
+      chatStatusEl.textContent = 'Screen share permission denied or unavailable.';
+    }
+  }
+
+  /* Grabs a still frame from the shared screen as a JPEG data URL, or
+     null if screen sharing isn't active. Called fresh on every message
+     so JARVIS always sees the current state of the screen. */
+  function captureScreenFrame() {
+    if (!screenStream || !screenVideoEl || !screenVideoEl.videoWidth) return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = screenVideoEl.videoWidth;
+    canvas.height = screenVideoEl.videoHeight;
+    canvas.getContext('2d').drawImage(screenVideoEl, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/jpeg', 0.7);
+  }
+
+  if (screenShareBtn) {
+    if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
+      screenShareBtn.addEventListener('click', () => {
+        if (screenStream) {
+          stopScreenShare();
+          chatStatusEl.textContent = '';
+          speak('SCREEN SHARING STOPPED');
+        } else {
+          startScreenShare();
+        }
+      });
+    } else {
+      screenShareBtn.disabled = true;
+      screenShareBtn.title = 'Screen sharing is not supported in this browser';
+    }
   }
 
   /* Fetches spoken audio from a premium TTS provider as a Blob. Throws
@@ -1091,11 +1176,12 @@
 
     sending = true;
     chatSendBtn.disabled = true;
-    chatStatusEl.textContent = 'JARVIS is thinking...';
+    const imageDataUrl = captureScreenFrame();
+    chatStatusEl.textContent = imageDataUrl ? 'JARVIS is looking at your screen...' : 'JARVIS is thinking...';
     setReactorState('thinking');
 
     try {
-      const reply = await callAI(text);
+      const reply = await callAI(text, imageDataUrl);
       chatStatusEl.textContent = '';
       speakReply(reply);
     } catch (err) {
