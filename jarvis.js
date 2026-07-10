@@ -410,6 +410,137 @@
     if (stopJarvisBtn) stopJarvisBtn.disabled = state !== 'speaking';
   }
 
+  /* ============ RHYTHM-DRIVEN REACTOR TALK ANIMATION ============
+     The core's motion while speaking is driven frame-by-frame from the
+     actual pacing of the reply text, instead of a fixed generic loop:
+     each word gets a slice of the total speech duration (weighted by its
+     length, with extra weight for trailing punctuation so the core
+     settles during natural pauses), and every animation frame looks up
+     which word is "active" right now to compute how far into its pulse
+     we are. For premium TTS audio, "now" is the audio element's real
+     currentTime. For the browser's built-in voice, live SpeechSynthesis
+     word-boundary events drive a decay pulse per word as it's actually
+     spoken; a text-timed fallback loop covers browsers that don't fire
+     boundary events, so the motion never goes fully static. */
+  function setReactorTalkVars(scale, glow) {
+    if (!reactorCoreEl) return;
+    reactorCoreEl.style.setProperty('--reactor-talk-scale', scale.toFixed(4));
+    reactorCoreEl.style.setProperty('--reactor-talk-glow', Math.max(0, Math.min(1, glow)).toFixed(4));
+  }
+
+  function clearReactorTalkVars() {
+    if (!reactorCoreEl) return;
+    reactorCoreEl.style.removeProperty('--reactor-talk-scale');
+    reactorCoreEl.style.removeProperty('--reactor-talk-glow');
+  }
+
+  function buildWordEnvelope(text, totalDurationSec) {
+    const words = (text || '').trim().split(/\s+/).filter(Boolean);
+    if (!words.length || !isFinite(totalDurationSec) || totalDurationSec <= 0) return null;
+    const weights = words.map((w) => {
+      let weight = Math.max(1, w.replace(/[^\w']/g, '').length);
+      if (/[,;:]$/.test(w)) weight += 1.2;
+      if (/[.!?]$/.test(w)) weight += 2.4;
+      return weight;
+    });
+    const totalWeight = weights.reduce((a, b) => a + b, 0) || 1;
+    let t = 0;
+    return words.map((word, i) => {
+      const dur = (weights[i] / totalWeight) * totalDurationSec;
+      const seg = { start: t, end: t + dur, seed: ((i * 37) % 7) / 7 };
+      t += dur;
+      return seg;
+    });
+  }
+
+  function envelopeIntensityAt(envelope, elapsedSec) {
+    if (!envelope) return 0;
+    const seg = envelope.find((s) => elapsedSec >= s.start && elapsedSec < s.end) || envelope[envelope.length - 1];
+    if (!seg) return 0;
+    const span = Math.max(0.001, seg.end - seg.start);
+    const phase = Math.min(1, Math.max(0, (elapsedSec - seg.start) / span));
+    return Math.sin(phase * Math.PI) * (0.75 + seg.seed * 0.25);
+  }
+
+  let reactorTalkStopFn = null;
+
+  function stopReactorTalkAnimation() {
+    if (reactorTalkStopFn) reactorTalkStopFn();
+    reactorTalkStopFn = null;
+    clearReactorTalkVars();
+  }
+
+  /* Ties the core's motion to real playback position of the given <audio>
+     element (premium TTS: OpenAI / ElevenLabs). */
+  function driveReactorTalkFromAudio(audioEl, text) {
+    stopReactorTalkAnimation();
+    let envelope = null;
+    let rafId = null;
+
+    function tick() {
+      if (audioEl.paused || audioEl.ended) { rafId = null; return; }
+      const intensity = envelopeIntensityAt(envelope, audioEl.currentTime);
+      setReactorTalkVars(1 + intensity * 0.07, intensity);
+      rafId = requestAnimationFrame(tick);
+    }
+    function start() {
+      envelope = buildWordEnvelope(text, audioEl.duration);
+      if (!rafId) rafId = requestAnimationFrame(tick);
+    }
+    if (audioEl.duration && isFinite(audioEl.duration)) {
+      start();
+    } else {
+      audioEl.addEventListener('loadedmetadata', start, { once: true });
+    }
+
+    reactorTalkStopFn = () => { if (rafId) cancelAnimationFrame(rafId); };
+  }
+
+  /* Ties the core's motion to the browser's built-in voice: a live pulse
+     on every real word-boundary event where supported, decaying smoothly
+     until the next word; a text-timed envelope fills in for browsers that
+     don't fire boundary events, so it's never just a static glow. */
+  function driveReactorTalkFromUtterance(utter, text) {
+    stopReactorTalkAnimation();
+    const words = (text || '').trim().split(/\s+/).filter(Boolean).length;
+    const estDuration = Math.max(0.6, words / 2.6);
+    const envelope = buildWordEnvelope(text, estDuration);
+
+    let usedBoundary = false;
+    let fallbackRaf = null;
+    let decayRaf = null;
+    let fallbackStartTs = 0;
+
+    function fallbackTick(ts) {
+      if (usedBoundary) { fallbackRaf = null; return; }
+      if (!fallbackStartTs) fallbackStartTs = ts;
+      const elapsed = (ts - fallbackStartTs) / 1000;
+      const intensity = envelopeIntensityAt(envelope, elapsed);
+      setReactorTalkVars(1 + intensity * 0.07, intensity);
+      fallbackRaf = requestAnimationFrame(fallbackTick);
+    }
+    fallbackRaf = requestAnimationFrame(fallbackTick);
+
+    utter.onboundary = (e) => {
+      if (e.name && e.name !== 'word') return;
+      usedBoundary = true;
+      if (fallbackRaf) { cancelAnimationFrame(fallbackRaf); fallbackRaf = null; }
+      if (decayRaf) cancelAnimationFrame(decayRaf);
+      const pulseStart = performance.now();
+      const PULSE_MS = 240;
+      (function decay(ts) {
+        const phase = Math.min(1, (ts - pulseStart) / PULSE_MS);
+        setReactorTalkVars(1 + (1 - phase) * 0.07, 1 - phase);
+        if (phase < 1) decayRaf = requestAnimationFrame(decay);
+      })(pulseStart);
+    };
+
+    reactorTalkStopFn = () => {
+      if (fallbackRaf) cancelAnimationFrame(fallbackRaf);
+      if (decayRaf) cancelAnimationFrame(decayRaf);
+    };
+  }
+
   /* ============ LIVE NETWORK STATUS ============ */
   function updateNetworkStatus() {
     const el = document.getElementById('network-status');
@@ -583,6 +714,7 @@
   const settingsTtsVoiceField = document.getElementById('tts-voice-field');
   const settingsTtsVoiceInput = document.getElementById('settings-tts-voice');
   const settingsTtsHint = document.getElementById('settings-tts-hint');
+  const settingsTtsPreviewStatus = document.getElementById('settings-tts-preview-status');
 
   const PROVIDER_PRESETS = {
     openai: {
@@ -737,6 +869,7 @@
     settingsTtsApiKeyInput.value = ts.apiKey || '';
     settingsTtsVoiceInput.value = ts.voice || '';
     applyTtsProviderUI(ttsProvider, { fillDefaults: !ts.apiKey });
+    if (settingsTtsPreviewStatus) settingsTtsPreviewStatus.textContent = '';
 
     settingsModal.classList.add('open');
   }
@@ -1007,22 +1140,49 @@
     throw new Error('No premium voice provider configured.');
   }
 
+  /* Turns a fetchPremiumTtsAudio() failure into a message that actually
+     tells the user what to fix, instead of a generic "it didn't work" —
+     this is what used to make a bad key/voice ID look like the app just
+     "wasn't detecting" the premium voice at all. */
+  function describeTtsError(err, provider) {
+    const label = provider === 'elevenlabs' ? 'ElevenLabs' : provider === 'openai' ? 'OpenAI voice' : 'Voice provider';
+    const msg = err && err.message ? err.message : '';
+    if (/Failed to fetch|NetworkError|TypeError/.test(msg)) {
+      return provider === 'elevenlabs'
+        ? label + ' request was blocked before it reached the server (network/CORS error). ' +
+          'In your ElevenLabs account, make sure browser API access is allowed for this key.'
+        : label + ' request was blocked before it reached the server (network/CORS error).';
+    }
+    if (/\b401\b/.test(msg)) return label + ' rejected the API key (401 unauthorized) — check it was copied correctly.';
+    if (/\b(404|422)\b/.test(msg)) {
+      return provider === 'elevenlabs'
+        ? label + ' could not find that voice ID (' + msg.match(/\b(404|422)\b/)[0] + ') — check it was copied correctly, not the voice name.'
+        : label + ' rejected the request (' + msg.match(/\b(404|422)\b/)[0] + ') — check the voice name/ID.';
+    }
+    return label + ' error: ' + (msg || 'request failed.');
+  }
+
   let currentTtsAudio = null;
-  function playAudioBlob(blob) {
+  function playAudioBlob(blob, text) {
     return new Promise((resolve, reject) => {
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
       currentTtsAudio = audio;
-      audio.onplay = () => setReactorState('speaking');
+      audio.onplay = () => {
+        setReactorState('speaking');
+        driveReactorTalkFromAudio(audio, text || '');
+      };
       audio.onended = () => {
         URL.revokeObjectURL(url);
         if (currentTtsAudio === audio) currentTtsAudio = null;
+        stopReactorTalkAnimation();
         setReactorState('idle');
         resolve();
       };
       audio.onerror = () => {
         URL.revokeObjectURL(url);
         if (currentTtsAudio === audio) currentTtsAudio = null;
+        stopReactorTalkAnimation();
         reject(new Error('Audio playback failed.'));
       };
       audio.play().catch(reject);
@@ -1039,9 +1199,12 @@
     const utter = new SpeechSynthesisUtterance(text);
     utter.rate = 1;
     utter.pitch = 0.9;
-    utter.onstart = () => setReactorState('speaking');
-    utter.onend = () => { setReactorState('idle'); onDone(); };
-    utter.onerror = () => { setReactorState('idle'); onDone(); };
+    utter.onstart = () => {
+      setReactorState('speaking');
+      driveReactorTalkFromUtterance(utter, text);
+    };
+    utter.onend = () => { stopReactorTalkAnimation(); setReactorState('idle'); onDone(); };
+    utter.onerror = () => { stopReactorTalkAnimation(); setReactorState('idle'); onDone(); };
     window.speechSynthesis.speak(utter);
   }
 
@@ -1074,15 +1237,19 @@
       try {
         const blob = await fetchPremiumTtsAudio(text, ttsSettings);
         if (myGen !== ttsGeneration) return; // stopped or superseded while fetching
-        await playAudioBlob(blob);
+        await playAudioBlob(blob, text);
         if (myGen !== ttsGeneration) return; // stopped mid-playback
         autoListenIfQuestion(text);
         return;
       } catch (err) {
         console.warn('Premium voice failed, falling back to browser voice:', err);
-        chatStatusEl.textContent = 'Voice provider error (' +
-          (err && err.message ? err.message : 'request failed') +
-          ') — using built-in voice instead.';
+        const reason = describeTtsError(err, ttsSettings.provider);
+        chatStatusEl.textContent = reason + ' — using built-in voice instead.';
+        // This is otherwise easy to miss: the panel is closed during most
+        // conversation flows (typing, wake word), so a silently swallowed
+        // premium-voice failure looks indistinguishable from the premium
+        // voice "just not being detected" at all. Surface it.
+        chatPanel.classList.add('open');
       }
     }
 
@@ -1104,6 +1271,7 @@
       currentTtsAudio = null;
     }
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    stopReactorTalkAnimation();
     setReactorState('idle');
     if (typeof clearAwaitingCommand === 'function') clearAwaitingCommand();
     speak('RESPONSE STOPPED', { duration: 1500 });
@@ -1118,16 +1286,36 @@
      voice before committing to it. */
   function previewVoice(ttsSettings) {
     const sample = "This is what I'll sound like when we talk. Shall we continue?";
+    // The settings modal sits on top of (and fully hides) the chat panel
+    // that chatStatusEl lives in, so status text written only there was
+    // invisible while the modal was open — silently "not working" from
+    // the user's perspective. Surface preview status in the modal itself.
+    if (settingsTtsPreviewStatus) settingsTtsPreviewStatus.textContent = '';
     if (ttsSettings.provider !== 'browser' && ttsSettings.apiKey) {
-      chatStatusEl.textContent = 'Loading voice preview...';
+      if (settingsTtsPreviewStatus) settingsTtsPreviewStatus.textContent = 'Loading voice preview…';
+      if (settingsPreviewVoiceBtn) settingsPreviewVoiceBtn.disabled = true;
       fetchPremiumTtsAudio(sample, ttsSettings)
-        .then((blob) => { chatStatusEl.textContent = ''; return playAudioBlob(blob); })
+        .then((blob) => {
+          if (settingsTtsPreviewStatus) settingsTtsPreviewStatus.textContent = 'Playing preview…';
+          return playAudioBlob(blob, sample);
+        })
+        .then(() => {
+          if (settingsTtsPreviewStatus) settingsTtsPreviewStatus.textContent = '';
+        })
         .catch((err) => {
-          chatStatusEl.textContent = 'Voice preview failed: ' + (err && err.message ? err.message : 'error.');
+          if (settingsTtsPreviewStatus) {
+            settingsTtsPreviewStatus.textContent = describeTtsError(err, ttsSettings.provider);
+          }
           setReactorState('idle');
+        })
+        .finally(() => {
+          if (settingsPreviewVoiceBtn) settingsPreviewVoiceBtn.disabled = false;
         });
     } else {
-      speakWithBrowserVoice(sample, () => {});
+      if (settingsTtsPreviewStatus) settingsTtsPreviewStatus.textContent = 'Playing preview (browser voice)…';
+      speakWithBrowserVoice(sample, () => {
+        if (settingsTtsPreviewStatus) settingsTtsPreviewStatus.textContent = '';
+      });
     }
   }
 

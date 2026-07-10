@@ -591,10 +591,16 @@ a, button { font-family: inherit; }
   animation: corepulse 1.1s ease-in-out infinite;
 }
 .reactor-core.listening-state .core-fill-circle { stroke: var(--danger); }
-.reactor-core.speaking { animation: reactorTalk 0.4s ease-in-out infinite; }
-@keyframes reactorTalk {
-  0%, 100% { transform: scale(1); box-shadow: 0 0 40px var(--cyan), inset 0 0 30px rgba(0,217,255,0.4); }
-  50% { transform: scale(1.045); box-shadow: 0 0 80px var(--cyan), inset 0 0 55px rgba(0,217,255,0.65); }
+/* Driven live by JS (see driveReactorTalk* in jarvis.js), one frame at a
+   time, from the actual pacing of what JARVIS is saying — word timing
+   from the reply's TTS audio, or live SpeechSynthesis boundary events for
+   the browser voice — rather than a fixed, content-agnostic loop. */
+.reactor-core.speaking {
+  transition: transform 0.09s ease-out, box-shadow 0.09s ease-out;
+  transform: scale(var(--reactor-talk-scale, 1));
+  box-shadow:
+    0 0 calc(40px + var(--reactor-talk-glow, 0) * 42px) var(--cyan),
+    inset 0 0 calc(30px + var(--reactor-talk-glow, 0) * 28px) rgba(0,217,255,0.4);
 }
 
 /* Decorative HUD dial (non-interactive) */
