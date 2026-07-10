@@ -926,14 +926,23 @@
     voiceEl.style.opacity = '1';
   }
 
+  /* "Hey Jarvis, open <name>" site shortcuts. Add more by adding an entry
+     here — key is what the user says after "open", value is the URL. */
+  const VOICE_OPEN_SITES = {
+    youtube: { url: 'https://www.youtube.com', label: 'YouTube' },
+    entertainment: { url: 'https://www.streamex.net', label: 'Entertainment' }
+  };
+
   function tryHandleVoiceCommand(text) {
     // Strip a leading "hey jarvis" if it's still attached (e.g. typed
     // directly, rather than already stripped by the wake-word listener).
     const t = text.trim().replace(WAKE_PHRASE_RE, '').trim().toLowerCase().replace(/[.!?]+$/, '');
-    if (/^(open|launch|go to|pull up)\s+youtube$/.test(t)) {
-      openUrlInNewTab('https://www.youtube.com');
-      speakReply('Opening YouTube.');
-      offerManualLink('https://www.youtube.com', 'OPENING YOUTUBE');
+    const match = t.match(/^(?:open|launch|go to|pull up)\s+(.+)$/);
+    const site = match && VOICE_OPEN_SITES[match[1].trim()];
+    if (site) {
+      openUrlInNewTab(site.url);
+      speakReply('Opening ' + site.label + '.');
+      offerManualLink(site.url, 'OPENING ' + site.label.toUpperCase());
       return true;
     }
     return false;
