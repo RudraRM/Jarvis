@@ -559,11 +559,12 @@
   updateNetworkStatus();
 
   /* ============ CONNECTION SPEED TEST ============
-     Uses Ookla Speedtest infrastructure to measure real ping, download,
-     and upload throughput via their public CDN endpoints. */
-  const OOKLA_DOWN_URL = 'https://speedtest.ftp.otenet.gr/files/';
-  const OOKLA_UP_URL = 'https://speedtest.ftp.otenet.gr/upload.php';
-  const SPEEDTEST_TIMEOUT_MS = 15000;
+     Uses Cloudflare's public, CORS-enabled speed test endpoints
+     (the same ones used by @cloudflare/speedtest / speed.cloudflare.com)
+     to measure real ping, download, and upload throughput. */
+  const CF_DOWN_URL = 'https://speed.cloudflare.com/__down?bytes=';
+  const CF_UP_URL = 'https://speed.cloudflare.com/__up';
+  const SPEEDTEST_TIMEOUT_MS = 10000;
 
   const speedtestBtn = document.getElementById('speedtest-btn');
   const speedtestBarFill = document.getElementById('speedtest-bar-fill');
@@ -600,7 +601,7 @@
     const times = [];
     for (let i = 0; i < samples; i++) {
       const start = performance.now();
-      const res = await fetchWithTimeout(cacheBust(OOKLA_DOWN_URL + '1mb.bin'), { cache: 'no-store', mode: 'cors' }, 5000);
+      const res = await fetchWithTimeout(cacheBust(CF_DOWN_URL + '0'), { cache: 'no-store', mode: 'cors' }, 5000);
       if (!res.ok) throw new Error('Ping endpoint returned ' + res.status);
       times.push(performance.now() - start);
       setSpeedtestProgress((i + 1) / samples * 20);
@@ -609,9 +610,9 @@
     return times[Math.floor(times.length / 2)];
   }
 
-  async function measureDownload() {
+  async function measureDownload(bytes = 10_000_000) {
     const start = performance.now();
-    const res = await fetchWithTimeout(cacheBust(OOKLA_DOWN_URL + '100mb.bin'), { cache: 'no-store', mode: 'cors' });
+    const res = await fetchWithTimeout(cacheBust(CF_DOWN_URL + bytes), { cache: 'no-store', mode: 'cors' });
     if (!res.ok) throw new Error('Download endpoint returned ' + res.status);
     const blob = await res.blob();
     const durationSec = (performance.now() - start) / 1000;
@@ -620,12 +621,11 @@
     return bits / durationSec / 1_000_000; // Mbps
   }
 
-  async function measureUpload() {
-    const bytes = 10_000_000;
+  async function measureUpload(bytes = 4_000_000) {
     const data = new Uint8Array(bytes);
     crypto.getRandomValues(data.subarray(0, Math.min(65536, bytes)));
     const start = performance.now();
-    const res = await fetchWithTimeout(OOKLA_UP_URL, { method: 'POST', body: data, cache: 'no-store', mode: 'cors' });
+    const res = await fetchWithTimeout(CF_UP_URL, { method: 'POST', body: data, cache: 'no-store', mode: 'cors' });
     if (!res.ok) throw new Error('Upload endpoint returned ' + res.status);
     const durationSec = (performance.now() - start) / 1000;
     setSpeedtestProgress(100);
@@ -653,7 +653,13 @@
       stPingEl.textContent = ping.toFixed(0) + ' ms';
 
       speedtestStatus.textContent = 'Measuring download speed...';
-      const down = await measureDownload();
+      let down;
+      try {
+        down = await measureDownload();
+      } catch (err) {
+        if (err.name === 'AbortError') throw err;
+        down = await measureDownload(2_000_000); // retry smaller in case the link is just slow
+      }
       stDownEl.textContent = down.toFixed(1) + ' Mbps';
 
       speedtestStatus.textContent = 'Measuring upload speed...';
@@ -665,9 +671,9 @@
     } catch (err) {
       const isAbort = err && err.name === 'AbortError';
       speedtestStatus.textContent = isAbort
-        ? 'Speed test timed out. Your connection may be slow, or a firewall/ad-blocker is blocking Ookla servers.'
+        ? 'Speed test timed out. Your connection may be slow, or a firewall/ad-blocker is blocking speed.cloudflare.com.'
         : 'Speed test failed: ' + (err && err.message ? err.message : 'network error.') +
-          ' An ad-blocker or firewall may be blocking Ookla servers.';
+          ' An ad-blocker or firewall may be blocking speed.cloudflare.com.';
       setSpeedtestProgress(0);
     } finally {
       speedtestRunning = false;
