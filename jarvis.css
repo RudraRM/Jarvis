@@ -280,6 +280,45 @@ a, button { font-family: inherit; }
 }
 .dashboard-grid { background-size: 60px 60px; }
 
+/* Decorative galaxy backdrop: a starfield plus soft colorful nebula
+   clouds, sized larger than the viewport and slowly panned so it drifts
+   — purely visual, not interactive. Sits behind the whole dashboard;
+   the sidebars get their own opaque background (below) so this never
+   shows through them. */
+.galaxy-bg {
+  position: absolute;
+  top: -15%; left: -15%;
+  width: 130%; height: 130%;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(1.6px 1.6px at 12% 22%, #fff, transparent),
+    radial-gradient(1.2px 1.2px at 68% 12%, rgba(255,255,255,0.85), transparent),
+    radial-gradient(1.6px 1.6px at 40% 68%, rgba(255,255,255,0.9), transparent),
+    radial-gradient(1.2px 1.2px at 84% 58%, rgba(255,255,255,0.7), transparent),
+    radial-gradient(1.6px 1.6px at 8% 82%, rgba(255,255,255,0.8), transparent),
+    radial-gradient(1.2px 1.2px at 92% 88%, rgba(255,255,255,0.6), transparent),
+    radial-gradient(1.6px 1.6px at 54% 42%, rgba(255,255,255,0.85), transparent),
+    radial-gradient(1.2px 1.2px at 30% 50%, rgba(255,255,255,0.65), transparent),
+    radial-gradient(ellipse 900px 650px at 18% 25%, rgba(147,51,234,0.30), transparent 60%),
+    radial-gradient(ellipse 820px 620px at 82% 18%, rgba(0,153,255,0.24), transparent 60%),
+    radial-gradient(ellipse 760px 720px at 75% 85%, rgba(236,72,153,0.20), transparent 65%),
+    radial-gradient(ellipse 620px 520px at 22% 88%, rgba(34,211,238,0.16), transparent 60%);
+  background-repeat:
+    repeat, repeat, repeat, repeat, repeat, repeat, repeat, repeat,
+    no-repeat, no-repeat, no-repeat, no-repeat;
+  background-size:
+    220px 220px, 260px 260px, 300px 300px, 240px 240px,
+    280px 280px, 320px 320px, 250px 250px, 210px 210px,
+    100% 100%, 100% 100%, 100% 100%, 100% 100%;
+  animation: galaxyDrift 100s ease-in-out infinite alternate;
+}
+@keyframes galaxyDrift {
+  0%   { transform: translate(0, 0) scale(1); }
+  50%  { transform: translate(-3%, 2%) scale(1.03); }
+  100% { transform: translate(2%, -2%) scale(1); }
+}
+
 .top-bar {
   position: relative;
   z-index: 3;
@@ -353,10 +392,16 @@ a, button { font-family: inherit; }
 }
 
 .sidebar {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   gap: 14px;
   overflow-y: auto;
+  /* Opaque backdrop so the decorative galaxy background never shows
+     through the sidebar (gaps between panels, etc.) — it's main-content
+     only. */
+  background: var(--dark);
   transition: transform 0.4s ease, opacity 0.4s ease;
 }
 .sidebar.hidden-side { transform: translateX(-120%); opacity: 0; pointer-events: none; }
@@ -378,14 +423,14 @@ a, button { font-family: inherit; }
   transform: translateY(-2px);
 }
 .panel-label {
-  font-family: 'Orbitron', sans-serif;
+  font-family: 'Share Tech Mono', monospace;
   font-size: 0.68rem;
   letter-spacing: 0.15em;
   color: #6c85a8;
   margin-bottom: 8px;
 }
 .panel-value {
-  font-family: 'Orbitron', sans-serif;
+  font-family: 'Share Tech Mono', monospace;
   font-size: 1.5rem;
   color: var(--cyan);
   text-shadow: 0 0 10px var(--cyan-dim);
@@ -463,9 +508,10 @@ a, button { font-family: inherit; }
 .hud-btn.active-toggle { background: var(--cyan); color: #001a22; }
 .hud-btn:disabled { opacity: 0.35; cursor: not-allowed; box-shadow: none; }
 .hud-btn:disabled:hover { border-color: var(--cyan-dim); box-shadow: none; }
+.sidebar .hud-btn { font-family: 'Share Tech Mono', monospace; }
 
 .clock {
-  font-family: 'Orbitron', sans-serif;
+  font-family: 'Share Tech Mono', monospace;
   font-size: 1.7rem;
   color: var(--cyan);
   text-shadow: 0 0 12px var(--cyan-dim);
@@ -497,7 +543,7 @@ a, button { font-family: inherit; }
 .reactor-ring {
   position: absolute;
   border-radius: 50%;
-  border: 1px solid rgba(0,217,255,0.35);
+  border: 2.5px solid rgba(0,217,255,0.45);
 }
 .ring-outer { width: min(64vh, 480px); height: min(64vh, 480px); animation: spin 24s linear infinite; border-style: dashed; }
 .ring-mid { width: min(50vh, 380px); height: min(50vh, 380px); animation: spin-rev 18s linear infinite; }
