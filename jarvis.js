@@ -899,6 +899,31 @@
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+    return a;
+  }
+
+  /* Browsers only allow a script to open a new tab during a genuine,
+     still-"fresh" user gesture (a real click). A voice command recognized
+     asynchronously from a SpeechRecognition result does NOT count as one
+     — even if listening was originally started by a click — so the
+     automatic open below is very often silently blocked by the popup
+     blocker with no error to catch. There is no way to force it open
+     from code; the only reliable fix is to also show a real, clickable
+     link so a single tap (a genuine gesture) always gets the user there. */
+  function offerManualLink(url, label) {
+    clearTimeout(voiceTimeout);
+    voiceEl.innerHTML = '';
+    const text = document.createTextNode(label + ' — ');
+    const link = document.createElement('a');
+    link.href = url;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.textContent = 'tap here if it didn\'t open';
+    link.style.color = 'var(--cyan)';
+    link.style.textDecoration = 'underline';
+    voiceEl.appendChild(text);
+    voiceEl.appendChild(link);
+    voiceEl.style.opacity = '1';
   }
 
   function tryHandleVoiceCommand(text) {
@@ -908,6 +933,7 @@
     if (/^(open|launch|go to|pull up)\s+youtube$/.test(t)) {
       openUrlInNewTab('https://www.youtube.com');
       speakReply('Opening YouTube.');
+      offerManualLink('https://www.youtube.com', 'OPENING YOUTUBE');
       return true;
     }
     return false;
