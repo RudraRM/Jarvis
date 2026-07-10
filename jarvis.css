@@ -490,6 +490,13 @@ a, button { font-family: inherit; }
 @keyframes fadein { from { opacity: 0; transform: translateX(-8px);} to { opacity:1; transform:translateX(0);} }
 
 .sidebar-buttons { display: flex; flex-direction: column; gap: 10px; margin-top: auto; }
+
+.widget-launch-buttons { display: flex; flex-direction: column; gap: 10px; }
+
+/* Pushes the voice chat trigger to the very bottom of the right sidebar,
+   regardless of how many panels/buttons sit above it. */
+.right-sidebar .voice-chat-btn { margin-top: auto; }
+
 .hud-btn {
   position: relative;
   overflow: hidden;
@@ -933,4 +940,113 @@ body.darker-theme .panel { background: linear-gradient(135deg, rgba(10,16,30,0.7
   .top-bar { flex-wrap: wrap; gap: 8px; }
   .chat-panel { right: 0; left: 0; width: 100%; border-radius: 0; }
   .chat-panel.open { height: 230px; }
+  .widget-panel { width: min(320px, calc(100vw - 32px)); }
 }
+
+/* ============ FLOATING WIDGETS ============ */
+.widgets-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+}
+
+.widget-panel {
+  position: fixed;
+  width: 320px;
+  max-width: calc(100vw - 32px);
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(135deg, rgba(26,42,74,0.92), rgba(10,14,39,0.96));
+  border: 1px solid var(--cyan);
+  border-radius: 10px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.5), 0 0 24px rgba(0,217,255,0.2);
+  pointer-events: auto;
+  animation: widgetPopIn 0.25s ease;
+}
+@keyframes widgetPopIn {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
+}
+.widget-panel.widget-pulse { animation: widgetPulse 0.5s ease; }
+@keyframes widgetPulse {
+  0%, 100% { box-shadow: 0 10px 40px rgba(0,0,0,0.5), 0 0 24px rgba(0,217,255,0.2); }
+  50% { box-shadow: 0 10px 40px rgba(0,0,0,0.5), 0 0 40px rgba(0,217,255,0.6); }
+}
+
+.widget-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(0,217,255,0.25);
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  color: var(--cyan);
+  cursor: grab;
+  user-select: none;
+}
+.widget-header:active { cursor: grabbing; }
+.widget-close-btn {
+  background: transparent;
+  border: 1px solid rgba(0,217,255,0.3);
+  color: var(--cyan);
+  width: 24px; height: 24px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  line-height: 1;
+  transition: all 0.2s ease;
+}
+.widget-close-btn:hover { border-color: var(--danger); color: var(--danger); box-shadow: 0 0 10px rgba(255,59,59,0.4); }
+
+.widget-body { padding: 14px; overflow-y: auto; max-height: 60vh; }
+
+/* Web info widget */
+.webinfo-status { font-size: 0.72rem; color: #9fb0c8; margin-bottom: 10px; min-height: 1em; }
+.webinfo-list { list-style: none; display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.webinfo-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-left: 2px solid var(--cyan);
+  background: rgba(0,217,255,0.05);
+  font-size: 0.78rem;
+}
+.webinfo-item a { color: var(--text); text-decoration: none; line-height: 1.4; }
+.webinfo-item a:hover { color: var(--cyan); text-decoration: underline; }
+.webinfo-meta { flex-shrink: 0; color: var(--cyan); font-family: 'Share Tech Mono', monospace; font-size: 0.72rem; }
+
+/* Calculator widget */
+.calc-display {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(0,217,255,0.06);
+  border: 1px solid rgba(0,217,255,0.3);
+  color: var(--text);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 1.4rem;
+  text-align: right;
+  padding: 10px 12px;
+  border-radius: 6px;
+  margin-bottom: 10px;
+}
+.calc-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.calc-btn {
+  background: transparent;
+  border: 1px solid var(--cyan-dim);
+  color: var(--text);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.95rem;
+  padding: 12px 0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.calc-btn:hover { border-color: var(--cyan); box-shadow: 0 0 12px var(--cyan-dim); }
+.calc-btn.calc-op { color: var(--cyan); }
+.calc-btn.calc-equals { background: var(--cyan); color: #001a22; grid-column: span 1; }
+.calc-btn.calc-zero { grid-column: span 2; }

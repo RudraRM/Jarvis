@@ -101,9 +101,12 @@
         <div class="panel-value small"><span class="count" id="power-pct">92</span>%</div>
       </div>
 
-      <div class="panel metric-card" data-detail="All diagnostics green. No structural or systemic anomalies.">
-        <div class="panel-label">SYSTEM HEALTH</div>
-        <div class="panel-value"><span class="count" id="health-pct">98</span>%</div>
+      <div class="panel">
+        <div class="panel-label">WIDGETS</div>
+        <div class="widget-launch-buttons">
+          <button class="hud-btn" id="widget-webinfo-btn">&#127760; WEB INFO</button>
+          <button class="hud-btn" id="widget-calculator-btn">&#128290; CALCULATOR</button>
+        </div>
       </div>
 
       <div class="panel">
@@ -127,7 +130,6 @@
         <button class="hud-btn" data-view="diagnostics">DIAGNOSTICS</button>
         <button class="hud-btn" data-view="defense">DEFENSE GRID</button>
         <button class="hud-btn" data-view="comms">COMMS</button>
-        <button class="hud-btn" id="chat-toggle-btn">VOICE CHAT</button>
         <button class="hud-btn" id="wake-toggle-btn" title="When on, say &quot;Hey Jarvis&quot; anytime to ask a question hands-free">HEY JARVIS: OFF</button>
       </div>
     </aside>
@@ -210,6 +212,7 @@
 
       <button id="theme-toggle" class="hud-btn">TOGGLE DARKER THEME</button>
       <button id="stop-jarvis-btn" class="hud-btn danger-btn" title="Stop JARVIS mid-response" disabled>STOP RESPONSE</button>
+      <button id="chat-toggle-btn" class="hud-btn voice-chat-btn">VOICE CHAT</button>
     </aside>
   </div>
 
@@ -314,6 +317,9 @@
     </div>
   </div>
 </div>
+
+<!-- ============ FLOATING WIDGETS LAYER ============ -->
+<div id="widgets-layer" class="widgets-layer" aria-hidden="false"></div>
 
 <script src="jarvis.js"></script>
 </body>

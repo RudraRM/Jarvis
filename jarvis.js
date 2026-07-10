@@ -206,7 +206,6 @@
   function tickMetrics() {
     applyMetric('metric-temp', 'temp', 75, 100, 4); // Fahrenheit (was 24-38 Celsius)
     applyMetric('power-pct', 'power', 70, 100, 4, 'power-bar');
-    applyMetric('health-pct', 'health', 88, 100, 2);
     applyMetric('cpu-pct', 'cpu', 15, 85, 8, 'cpu-bar');
     applyMetric('mem-pct', 'mem', 30, 90, 6, 'mem-bar');
 
@@ -1402,6 +1401,225 @@
       wakeToggleBtn.title = 'Speech recognition is not supported in this browser';
     }
   }
+
+  /* ============ FLOATING WIDGETS ============
+     Draggable pop-up widgets rendered onto the galaxy grid backdrop.
+     Each widget type is a singleton: re-clicking its sidebar button
+     brings the existing instance to the front instead of duplicating it. */
+  const widgetsLayer = document.getElementById('widgets-layer');
+  const openWidgets = {};
+  let widgetZTop = 1;
+  let widgetCascade = 0;
+
+  function bringWidgetToFront(el) {
+    widgetZTop += 1;
+    el.style.zIndex = widgetZTop;
+  }
+
+  function makeWidgetDraggable(widgetEl, handleEl) {
+    let dragging = false;
+    let startX = 0, startY = 0, originX = 0, originY = 0;
+
+    function onPointerDown(e) {
+      dragging = true;
+      bringWidgetToFront(widgetEl);
+      const point = e.touches ? e.touches[0] : e;
+      startX = point.clientX;
+      startY = point.clientY;
+      const rect = widgetEl.getBoundingClientRect();
+      originX = rect.left;
+      originY = rect.top;
+      document.addEventListener('mousemove', onPointerMove);
+      document.addEventListener('mouseup', onPointerUp);
+      document.addEventListener('touchmove', onPointerMove, { passive: false });
+      document.addEventListener('touchend', onPointerUp);
+    }
+
+    function onPointerMove(e) {
+      if (!dragging) return;
+      if (e.touches) e.preventDefault();
+      const point = e.touches ? e.touches[0] : e;
+      const dx = point.clientX - startX;
+      const dy = point.clientY - startY;
+      const maxX = window.innerWidth - widgetEl.offsetWidth;
+      const maxY = window.innerHeight - widgetEl.offsetHeight;
+      const nextX = Math.min(Math.max(0, originX + dx), Math.max(0, maxX));
+      const nextY = Math.min(Math.max(0, originY + dy), Math.max(0, maxY));
+      widgetEl.style.left = nextX + 'px';
+      widgetEl.style.top = nextY + 'px';
+    }
+
+    function onPointerUp() {
+      dragging = false;
+      document.removeEventListener('mousemove', onPointerMove);
+      document.removeEventListener('mouseup', onPointerUp);
+      document.removeEventListener('touchmove', onPointerMove);
+      document.removeEventListener('touchend', onPointerUp);
+    }
+
+    handleEl.addEventListener('mousedown', onPointerDown);
+    handleEl.addEventListener('touchstart', onPointerDown, { passive: true });
+  }
+
+  function createWidget(id, title, bodyHtml) {
+    if (openWidgets[id]) {
+      bringWidgetToFront(openWidgets[id]);
+      openWidgets[id].classList.add('widget-pulse');
+      setTimeout(() => openWidgets[id] && openWidgets[id].classList.remove('widget-pulse'), 500);
+      return openWidgets[id];
+    }
+
+    const el = document.createElement('div');
+    el.className = 'widget-panel';
+    el.innerHTML =
+      '<div class="widget-header">' +
+        '<span class="widget-title">' + title + '</span>' +
+        '<button class="widget-close-btn" title="Close" aria-label="Close widget">&times;</button>' +
+      '</div>' +
+      '<div class="widget-body">' + bodyHtml + '</div>';
+
+    const offset = (widgetCascade % 5) * 28;
+    widgetCascade += 1;
+    el.style.left = (80 + offset) + 'px';
+    el.style.top = (140 + offset) + 'px';
+
+    widgetsLayer.appendChild(el);
+    openWidgets[id] = el;
+    bringWidgetToFront(el);
+
+    const header = el.querySelector('.widget-header');
+    makeWidgetDraggable(el, header);
+    el.addEventListener('mousedown', () => bringWidgetToFront(el));
+
+    el.querySelector('.widget-close-btn').addEventListener('click', () => {
+      el.remove();
+      delete openWidgets[id];
+    });
+
+    return el;
+  }
+
+  /* -------- Web Info widget: live top stories via the Hacker News API
+     (public, no API key, CORS-enabled) -------- */
+  function openWebInfoWidget() {
+    const el = createWidget(
+      'webinfo',
+      'WEB INFO — LIVE FEED',
+      '<div class="webinfo-status" id="webinfo-status">Fetching latest stories&hellip;</div>' +
+      '<ul class="webinfo-list" id="webinfo-list"></ul>' +
+      '<button class="hud-btn" id="webinfo-refresh-btn">REFRESH</button>'
+    );
+
+    const statusEl = el.querySelector('#webinfo-status');
+    const listEl = el.querySelector('#webinfo-list');
+    const refreshBtn = el.querySelector('#webinfo-refresh-btn');
+
+    async function loadTopStories() {
+      statusEl.textContent = 'Fetching latest stories…';
+      listEl.innerHTML = '';
+      try {
+        const idsRes = await fetch('https://hacker-news.firebaseio.com/v0/topstories.json');
+        if (!idsRes.ok) throw new Error('HTTP ' + idsRes.status);
+        const ids = (await idsRes.json()).slice(0, 8);
+
+        const items = await Promise.all(ids.map((id) =>
+          fetch('https://hacker-news.firebaseio.com/v0/item/' + id + '.json').then((r) => r.json())
+        ));
+
+        listEl.innerHTML = items.map((item) => {
+          if (!item) return '';
+          const link = item.url || ('https://news.ycombinator.com/item?id=' + item.id);
+          const title = (item.title || 'Untitled').replace(/</g, '&lt;');
+          return '<li class="webinfo-item">' +
+            '<a href="' + link + '" target="_blank" rel="noopener noreferrer">' + title + '</a>' +
+            '<span class="webinfo-meta">▲ ' + (item.score || 0) + '</span>' +
+          '</li>';
+        }).join('');
+
+        statusEl.textContent = 'Live — updated ' + new Date().toLocaleTimeString();
+      } catch (err) {
+        statusEl.textContent = 'Could not reach the network for live data: ' +
+          (err && err.message ? err.message : 'unknown error');
+      }
+    }
+
+    refreshBtn.addEventListener('click', loadTopStories);
+    loadTopStories();
+  }
+
+  /* -------- Calculator widget -------- */
+  function openCalculatorWidget() {
+    const el = createWidget(
+      'calculator',
+      'CALCULATOR',
+      '<input type="text" id="calc-display" class="calc-display" value="0" readonly>' +
+      '<div class="calc-grid">' +
+        '<button class="calc-btn calc-op" data-key="clear">C</button>' +
+        '<button class="calc-btn calc-op" data-key="backspace">⌫</button>' +
+        '<button class="calc-btn calc-op" data-key="%">%</button>' +
+        '<button class="calc-btn calc-op" data-key="/">÷</button>' +
+        '<button class="calc-btn" data-key="7">7</button>' +
+        '<button class="calc-btn" data-key="8">8</button>' +
+        '<button class="calc-btn" data-key="9">9</button>' +
+        '<button class="calc-btn calc-op" data-key="*">×</button>' +
+        '<button class="calc-btn" data-key="4">4</button>' +
+        '<button class="calc-btn" data-key="5">5</button>' +
+        '<button class="calc-btn" data-key="6">6</button>' +
+        '<button class="calc-btn calc-op" data-key="-">−</button>' +
+        '<button class="calc-btn" data-key="1">1</button>' +
+        '<button class="calc-btn" data-key="2">2</button>' +
+        '<button class="calc-btn" data-key="3">3</button>' +
+        '<button class="calc-btn calc-op" data-key="+">+</button>' +
+        '<button class="calc-btn calc-zero" data-key="0">0</button>' +
+        '<button class="calc-btn" data-key=".">.</button>' +
+        '<button class="calc-btn calc-op calc-equals" data-key="=">=</button>' +
+      '</div>'
+    );
+
+    const display = el.querySelector('#calc-display');
+    let expr = '';
+
+    function render() {
+      display.value = expr === '' ? '0' : expr;
+    }
+
+    function evaluate(expression) {
+      if (!/^[0-9+\-*/.% ]+$/.test(expression)) throw new Error('Invalid input');
+      // eslint-disable-next-line no-new-func
+      const result = Function('"use strict"; return (' + expression + ')')();
+      if (typeof result !== 'number' || !isFinite(result)) throw new Error('Invalid result');
+      return result;
+    }
+
+    el.querySelector('.calc-grid').addEventListener('click', (e) => {
+      const btn = e.target.closest('.calc-btn');
+      if (!btn) return;
+      const key = btn.dataset.key;
+
+      if (key === 'clear') {
+        expr = '';
+      } else if (key === 'backspace') {
+        expr = expr.slice(0, -1);
+      } else if (key === '=') {
+        try {
+          expr = String(evaluate(expr));
+        } catch {
+          expr = 'ERROR';
+        }
+      } else {
+        if (expr === 'ERROR') expr = '';
+        expr += key;
+      }
+      render();
+    });
+
+    render();
+  }
+
+  const widgetWebInfoBtn = document.getElementById('widget-webinfo-btn');
+  const widgetCalculatorBtn = document.getElementById('widget-calculator-btn');
+  if (widgetWebInfoBtn) widgetWebInfoBtn.addEventListener('click', openWebInfoWidget);
+  if (widgetCalculatorBtn) widgetCalculatorBtn.addEventListener('click', openCalculatorWidget);
 
   /* prevent scroll jank on dashboard page background */
   landingPage.style.opacity = '1';
