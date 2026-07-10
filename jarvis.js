@@ -750,18 +750,10 @@
   }
   if (settingsSaveBtn) {
     settingsSaveBtn.addEventListener('click', () => {
-      const provider = settingsProviderInput.value;
-      const preset = PROVIDER_PRESETS[provider] || PROVIDER_PRESETS.openai;
-      const baseUrl = settingsBaseUrlInput.value.trim().replace(/\/+$/, '');
-      const model = settingsModelInput.value.trim();
-      const apiKey = settingsApiKeyInput.value.trim();
-      if (!model || !apiKey || (preset.needsBaseUrl && !baseUrl)) {
-        chatStatusEl.textContent = 'Please fill in the required fields to enable chat.';
-        closeSettingsModal();
-        return;
-      }
-      saveAiSettings({ provider, baseUrl, model, apiKey });
-
+      // Voice settings are independent of the chat AI settings and must
+      // always be saved, even if the chat fields below are left blank
+      // (e.g. someone only wants to configure a premium voice and
+      // already has chat set up, or hasn't set it up yet at all).
       const ttsProvider = settingsTtsProviderInput.value;
       const ttsPreset = TTS_PROVIDER_PRESETS[ttsProvider] || TTS_PROVIDER_PRESETS.browser;
       const ttsApiKey = settingsTtsApiKeyInput.value.trim();
@@ -771,6 +763,20 @@
       } else {
         saveTtsSettings({ provider: 'browser' });
       }
+
+      const provider = settingsProviderInput.value;
+      const preset = PROVIDER_PRESETS[provider] || PROVIDER_PRESETS.openai;
+      const baseUrl = settingsBaseUrlInput.value.trim().replace(/\/+$/, '');
+      const model = settingsModelInput.value.trim();
+      const apiKey = settingsApiKeyInput.value.trim();
+      if (!model || !apiKey || (preset.needsBaseUrl && !baseUrl)) {
+        closeSettingsModal();
+        chatStatusEl.textContent = ttsProvider !== 'browser' && ttsApiKey
+          ? 'Voice settings saved. Fill in the AI provider fields too to enable chat.'
+          : 'Please fill in the required fields to enable chat.';
+        return;
+      }
+      saveAiSettings({ provider, baseUrl, model, apiKey });
 
       closeSettingsModal();
       chatStatusEl.textContent = 'AI connection configured. Ready to talk.';
@@ -1075,6 +1081,9 @@
         return;
       } catch (err) {
         console.warn('Premium voice failed, falling back to browser voice:', err);
+        chatStatusEl.textContent = 'Voice provider error (' +
+          (err && err.message ? err.message : 'request failed') +
+          ') — using built-in voice instead.';
       }
     }
 
