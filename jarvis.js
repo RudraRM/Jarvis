@@ -1284,7 +1284,10 @@
      ("what's", "how much", "check", etc.) are stripped, so it stays
      forgiving of real phrasing the same way VOICE_OPEN_SITES is. */
   const WIDGET_QUERIES = [
-    { match: /temperat|how hot|how warm/, answer: () => `Core temperature is ${widgetText('metric-temp')} degrees Fahrenheit.` },
+    {
+      match: /(temperat|how hot|how warm).*\b(mckinney|texas|\btx\b)\b|\b(mckinney|texas|\btx\b)\b.*(temperat|how hot|how warm)/,
+      answer: () => `The current temperature in McKinney, Texas is ${widgetText('metric-temp')} degrees Fahrenheit.`
+    },
     { match: /power level|power percent|\bpower\b/, answer: () => `Power level is at ${widgetText('power-pct')} percent.` },
     { match: /cpu|processor|processing load/, answer: () => `CPU load is at ${widgetText('cpu-pct')} percent.` },
     { match: /memory|\bram\b/, answer: () => `Memory usage is at ${widgetText('mem-pct')} percent.` },
