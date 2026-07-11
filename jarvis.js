@@ -1386,10 +1386,26 @@
   }
 
   /* Bare "Hey Jarvis" with no trailing request: JARVIS greets the user
-     out loud, then autoListenIfQuestion (triggered because the greeting
-     itself ends in "?") starts the timed listening window automatically. */
+     out loud immediately, then autoListenIfQuestion (triggered because
+     the greeting itself ends in "?") starts the timed listening window
+     automatically. This greeting always uses the instant browser voice
+     rather than a premium TTS provider — fetching premium audio over the
+     network can take several seconds, and a wake-word ack needs to feel
+     immediate, not like it's "thinking" about a fixed line. */
   function respondToWakeWord() {
-    speakReply('What do you need help with today?');
+    const greeting = 'What do you need help with today?';
+    speak(greeting, { duration: captionDuration(greeting) });
+    ttsGeneration++;
+    const myGen = ttsGeneration;
+    if (currentTtsAudio) {
+      currentTtsAudio.pause();
+      currentTtsAudio = null;
+    }
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    speakWithBrowserVoice(greeting, () => {
+      if (myGen !== ttsGeneration) return;
+      autoListenIfQuestion(greeting);
+    });
   }
 
   let sending = false;
