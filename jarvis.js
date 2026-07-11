@@ -134,6 +134,7 @@
   let clockTimer = null;
   let metricsTimer = null;
   let alertTimer = null;
+  let tempTimer = null;
   let uptimeStart = null;
   let uptimeTimer = null;
   const voiceEl = document.getElementById('voice-feedback');
@@ -187,7 +188,7 @@
   }
 
   let state = {
-    temp: 86, power: 92, health: 98, cpu: 41, mem: 57, // temp in Fahrenheit
+    power: 92, health: 98, cpu: 41, mem: 57,
     oi1: 87, oi2: 64, oi3: 99
   };
 
@@ -204,7 +205,6 @@
   }
 
   function tickMetrics() {
-    applyMetric('metric-temp', 'temp', 75, 100, 4); // Fahrenheit (was 24-38 Celsius)
     applyMetric('power-pct', 'power', 70, 100, 4, 'power-bar');
     applyMetric('cpu-pct', 'cpu', 15, 85, 8, 'cpu-bar');
     applyMetric('mem-pct', 'mem', 30, 90, 6, 'mem-bar');
@@ -215,6 +215,42 @@
     document.getElementById('oi-1').textContent = state.oi1 + '%';
     document.getElementById('oi-2').textContent = state.oi2 + '%';
     document.getElementById('oi-3').textContent = state.oi3 + '%';
+  }
+
+  /* ============ LIVE TEMPERATURE (McKinney, TX) ============
+     The TEMPERATURE panel shows real current weather for McKinney, TX
+     instead of a simulated value. weather.com itself can't be fetched
+     directly from browser JS (no CORS headers, and scraping its HTML
+     would violate its terms of use), so this pulls the same real-world
+     reading from Open-Meteo's free, CORS-enabled, no-API-key-required
+     forecast API instead. */
+  const MCKINNEY_TX_LAT = 33.1972;
+  const MCKINNEY_TX_LON = -96.6398;
+  let liveTempF = null;
+
+  async function fetchLiveTemperature() {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${MCKINNEY_TX_LAT}&longitude=${MCKINNEY_TX_LON}` +
+      '&current=temperature_2m&temperature_unit=fahrenheit&timezone=America%2FChicago';
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error('Weather API returned ' + res.status);
+    const data = await res.json();
+    const temp = data && data.current && data.current.temperature_2m;
+    if (typeof temp !== 'number') throw new Error('No temperature in weather response');
+    return Math.round(temp);
+  }
+
+  async function updateLiveTemperature() {
+    const el = document.getElementById('metric-temp');
+    if (!el) return;
+    try {
+      const temp = await fetchLiveTemperature();
+      const from = liveTempF !== null ? liveTempF : temp;
+      liveTempF = temp;
+      countUp(el, from, temp);
+    } catch (err) {
+      console.warn('Live temperature fetch failed:', err);
+      if (liveTempF === null) el.textContent = '--';
+    }
   }
 
   const alertPool = [
@@ -237,12 +273,16 @@
     if (item.warn) speak('ALERT: ' + item.text.toUpperCase());
   }
 
+  const LIVE_TEMP_REFRESH_MS = 10 * 60 * 1000; // real weather doesn't need 3s polling
+
   function startDashboard() {
     uptimeStart = Date.now();
     updateClock();
     clockTimer = setInterval(updateClock, 1000);
     metricsTimer = setInterval(tickMetrics, 3000);
     alertTimer = setInterval(pushAlert, 8000);
+    updateLiveTemperature();
+    tempTimer = setInterval(updateLiveTemperature, LIVE_TEMP_REFRESH_MS);
     if (typeof resumeWakeWordIfEnabled === 'function') resumeWakeWordIfEnabled();
   }
 
@@ -250,6 +290,7 @@
     clearInterval(clockTimer);
     clearInterval(metricsTimer);
     clearInterval(alertTimer);
+    clearInterval(tempTimer);
     uptimeStart = null;
     if (typeof stopVoiceListening === 'function') stopVoiceListening();
   }
@@ -360,8 +401,9 @@
     if (key === 'e') {
       goToLanding();
     } else if (key === 'r') {
-      state = { temp: 86, power: 92, health: 98, cpu: 41, mem: 57, oi1: 87, oi2: 64, oi3: 99 };
+      state = { power: 92, health: 98, cpu: 41, mem: 57, oi1: 87, oi2: 64, oi3: 99 };
       tickMetrics();
+      updateLiveTemperature();
       speak('METRICS RESET');
     } else if (key === 's') {
       sidebarsHidden = !sidebarsHidden;
