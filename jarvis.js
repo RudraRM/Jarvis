@@ -301,6 +301,56 @@
     speak(isDarker ? 'DARKER THEME ENGAGED' : 'STANDARD THEME RESTORED');
   });
 
+  /* fullscreen toggle — uses the real Fullscreen API so it genuinely
+     takes over the whole screen (hiding browser chrome where the browser
+     allows it), not just a CSS trick. Listens for fullscreenchange so the
+     label/state stays correct even if the user exits via Esc or F11
+     instead of the button. */
+  const fullscreenBtn = document.getElementById('fullscreen-btn');
+  const fullscreenTarget = document.documentElement;
+
+  function isFullscreen() {
+    return !!(document.fullscreenElement || document.webkitFullscreenElement);
+  }
+
+  function updateFullscreenLabel() {
+    if (!fullscreenBtn) return;
+    fullscreenBtn.textContent = isFullscreen() ? 'EXIT FULLSCREEN' : 'ENTER FULLSCREEN';
+  }
+
+  async function toggleFullscreen() {
+    try {
+      if (!isFullscreen()) {
+        if (fullscreenTarget.requestFullscreen) {
+          await fullscreenTarget.requestFullscreen();
+        } else if (fullscreenTarget.webkitRequestFullscreen) {
+          fullscreenTarget.webkitRequestFullscreen();
+        } else {
+          throw new Error('Fullscreen API not supported');
+        }
+      } else {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        } else if (document.webkitExitFullscreen) {
+          document.webkitExitFullscreen();
+        }
+      }
+    } catch (err) {
+      speak('FULLSCREEN MODE IS NOT AVAILABLE IN THIS BROWSER.');
+    }
+  }
+
+  if (fullscreenBtn) {
+    if (!document.documentElement.requestFullscreen && !document.documentElement.webkitRequestFullscreen) {
+      fullscreenBtn.disabled = true;
+      fullscreenBtn.title = 'Fullscreen is not supported in this browser';
+    } else {
+      fullscreenBtn.addEventListener('click', toggleFullscreen);
+      document.addEventListener('fullscreenchange', updateFullscreenLabel);
+      document.addEventListener('webkitfullscreenchange', updateFullscreenLabel);
+    }
+  }
+
   /* keyboard shortcuts */
   let sidebarsHidden = false;
   document.addEventListener('keydown', (e) => {
@@ -318,6 +368,8 @@
       document.getElementById('left-sidebar').classList.toggle('hidden-side', sidebarsHidden);
       document.getElementById('right-sidebar').classList.toggle('hidden-side', sidebarsHidden);
       speak(sidebarsHidden ? 'SIDEBARS HIDDEN' : 'SIDEBARS RESTORED');
+    } else if (key === 'f') {
+      toggleFullscreen();
     } else if (e.ctrlKey && e.shiftKey && key === 'j') {
       speak("I AM ALWAYS WATCHING, SIR.");
     }
@@ -1071,7 +1123,10 @@
      in the sentence, not the whole sentence to equal it exactly. */
   const VOICE_OPEN_SITES = [
     { url: 'https://www.youtube.com', label: 'YouTube', match: /you[\s-]*tube/ },
-    { url: 'https://www.streamex.net', label: 'Entertainment', match: /entertainment/ }
+    { url: 'https://www.streamex.net', label: 'Entertainment', match: /entertainment/ },
+    { url: 'https://www.tiktok.com', label: 'TikTok', match: /tik[\s-]*tok/ },
+    { url: 'https://www.github.com', label: 'GitHub', match: /git[\s-]*hub/ },
+    { url: 'https://claude.ai/new', label: 'Claude', match: /claude/ }
   ];
   const OPEN_VERB_RE = /\b(open|launch|start|go to|pull up|play)\b/;
 
