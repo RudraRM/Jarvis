@@ -777,6 +777,36 @@
 
   if (speedtestBtn) speedtestBtn.addEventListener('click', runSpeedTest);
 
+  /* "Hey Jarvis, run/do a speed test" — actually kicks off runSpeedTest()
+     (the exact same measurement the sidebar RUN SPEED TEST button
+     triggers) rather than just reporting whatever the last result
+     happened to be, then reads the fresh sidebar readouts back once it
+     finishes. Checked ahead of the general widget-query speed test
+     pattern (which only reports an existing result) so an action verb
+     ("run", "do", "start"...) always triggers a real test. */
+  const RUN_SPEEDTEST_VERB_RE = /\b(run|do|start|perform|kick off|begin)\b/;
+
+  function tryHandleSpeedTestCommand(text) {
+    const t = text.trim().replace(WAKE_PHRASE_RE, '').trim().toLowerCase();
+    if (!/speed ?test/.test(t) || !RUN_SPEEDTEST_VERB_RE.test(t)) return false;
+
+    if (speedtestRunning) {
+      speakInstant('A speed test is already running.');
+      return true;
+    }
+
+    speakInstant('Running a speed test now. This will take a few seconds.');
+    runSpeedTest().then(() => {
+      const ping = widgetText('st-ping');
+      if (!ping || ping === '--') {
+        speakInstant('The speed test did not complete. ' + (speedtestStatus.textContent || 'Check your connection and try again.'));
+        return;
+      }
+      speakInstant(`Speed test complete. Ping ${ping}, download ${widgetText('st-download')}, upload ${widgetText('st-upload')}.`);
+    });
+    return true;
+  }
+
   /* ============ VOICE / AI CHAT ============
      Real speech-to-text (Web Speech API), real text generation (a
      user-configured OpenAI-compatible Chat Completions endpoint), and
@@ -1579,6 +1609,7 @@
     speak('YOU: ' + text, { duration: captionDuration(text) });
 
     if (tryHandleVoiceCommand(text)) return;
+    if (tryHandleSpeedTestCommand(text)) return;
     if (tryHandleWidgetQuery(text)) return;
 
     if (!aiConfigured()) {
