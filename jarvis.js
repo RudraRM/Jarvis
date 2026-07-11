@@ -1154,7 +1154,7 @@
     for (const site of VOICE_OPEN_SITES) {
       if (site.match.test(t)) {
         openUrlInNewTab(site.url);
-        speakReply('Opening ' + site.label + '. If it did not open automatically, tap the link on screen.');
+        speakReply('Opening ' + site.label + '.');
         offerManualLink(site.url, 'OPENING ' + site.label.toUpperCase());
         return true;
       }
