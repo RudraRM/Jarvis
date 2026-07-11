@@ -993,8 +993,13 @@
     });
   }
 
+  const BASE_SYSTEM_PROMPT = 'You are J.A.R.V.I.S., Tony Stark\'s AI assistant. Be concise, helpful, and a little witty. ' +
+    'You have live read access to the dashboard sidebar readouts (temperature, power, CPU, memory, network, ' +
+    'connection speed test, active protocols, alerts, uptime, local time). A snapshot of their current values is ' +
+    'given below — use it to answer any question about them, but only bring them up when actually asked.';
+
   let conversationHistory = [
-    { role: 'system', content: 'You are J.A.R.V.I.S., Tony Stark\'s AI assistant. Be concise, helpful, and a little witty.' }
+    { role: 'system', content: BASE_SYSTEM_PROMPT }
   ];
 
   function trimHistory() {
@@ -1003,8 +1008,17 @@
     }
   }
 
+  /* Refreshes the system message with a fresh snapshot of the sidebar
+     readouts right before every AI call, so the model always answers
+     with current numbers instead of stale or made-up ones — without
+     bloating the conversation history with a new message every turn. */
+  function refreshSystemPromptWithSidebarSnapshot() {
+    conversationHistory[0].content = BASE_SYSTEM_PROMPT + '\n\nCurrent dashboard readouts: ' + buildSidebarSummary() + '.';
+  }
+
   /* OpenAI-compatible Chat Completions (OpenAI, Groq, local servers, etc.) */
   async function callOpenAiCompatible(userText, settings) {
+    refreshSystemPromptWithSidebarSnapshot();
     conversationHistory.push({ role: 'user', content: userText });
     trimHistory();
 
@@ -1038,6 +1052,7 @@
      is a separate field, and the API key is a query param, not a
      Bearer header. */
   async function callGemini(userText, settings) {
+    refreshSystemPromptWithSidebarSnapshot();
     conversationHistory.push({ role: 'user', content: userText });
     trimHistory();
 
@@ -1141,6 +1156,106 @@
         openUrlInNewTab(site.url);
         speakReply('Opening ' + site.label + '. If it did not open automatically, tap the link on screen.');
         offerManualLink(site.url, 'OPENING ' + site.label.toUpperCase());
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /* ============ WIDGET / SIDEBAR AWARENESS ============
+     JARVIS can read the live readouts already on screen (left/right
+     sidebar panels) and answer direct questions about them instantly,
+     without a round trip to the AI — so it works even with no AI
+     provider configured, and answers immediately rather than "thinking"
+     about numbers that are already sitting in the DOM. Anything not
+     covered by these direct patterns still reaches the AI, which also
+     gets a live snapshot of the same readouts injected into its system
+     prompt (see refreshSystemPromptWithSidebarSnapshot) so it can answer
+     less literal, more conversational questions about the dashboard too. */
+  function widgetText(id) {
+    const el = document.getElementById(id);
+    return el ? el.textContent.trim() : null;
+  }
+
+  function activeProtocols() {
+    return Array.from(document.querySelectorAll('#protocol-list li'))
+      .filter((li) => li.classList.contains('active'))
+      .map((li) => li.textContent.trim());
+  }
+
+  function recentAlerts() {
+    return Array.from(document.querySelectorAll('#alert-feed .alert-item')).map((el) => el.textContent.trim());
+  }
+
+  function buildSidebarSummary() {
+    const ping = widgetText('st-ping');
+    const speedLine = (!ping || ping === '--')
+      ? 'the speed test has not been run yet'
+      : `ping ${ping}, download ${widgetText('st-download')}, upload ${widgetText('st-upload')}`;
+    const protocols = activeProtocols();
+    const alerts = recentAlerts();
+    return [
+      `temperature ${widgetText('metric-temp')} degrees`,
+      `power level ${widgetText('power-pct')} percent`,
+      `CPU load ${widgetText('cpu-pct')} percent`,
+      `memory usage ${widgetText('mem-pct')} percent`,
+      `network status ${widgetText('network-status')}`,
+      `${speedLine}`,
+      `active protocols: ${protocols.length ? protocols.join(', ') : 'none'}`,
+      `most recent alert: ${alerts.length ? alerts[0] : 'none, all systems nominal'}`,
+      `session uptime ${widgetText('uptime')}`,
+      `local time ${widgetText('clock')} on ${widgetText('date-display')}`
+    ].join('; ');
+  }
+
+  /* `match` is tested after the wake phrase and a question-ish lead-in
+     ("what's", "how much", "check", etc.) are stripped, so it stays
+     forgiving of real phrasing the same way VOICE_OPEN_SITES is. */
+  const WIDGET_QUERIES = [
+    { match: /temperat|how hot|how warm/, answer: () => `Core temperature is ${widgetText('metric-temp')} degrees Fahrenheit.` },
+    { match: /power level|power percent|\bpower\b/, answer: () => `Power level is at ${widgetText('power-pct')} percent.` },
+    { match: /cpu|processor|processing load/, answer: () => `CPU load is at ${widgetText('cpu-pct')} percent.` },
+    { match: /memory|\bram\b/, answer: () => `Memory usage is at ${widgetText('mem-pct')} percent.` },
+    {
+      match: /protocol/,
+      answer: () => {
+        const active = activeProtocols();
+        return active.length ? `Active protocols are ${active.join(', ')}.` : 'No protocols are currently active.';
+      }
+    },
+    {
+      match: /alert/,
+      answer: () => {
+        const alerts = recentAlerts();
+        return alerts.length ? `Latest alert: ${alerts[0]}.` : 'No alerts at this time. All systems nominal.';
+      }
+    },
+    { match: /\btime\b(?!out)/, answer: () => `The local time is ${widgetText('clock')}.` },
+    { match: /\bdate\b|what day/, answer: () => `Today is ${widgetText('date-display')}.` },
+    { match: /uptime|how long.*(on|running|up)/, answer: () => `Session uptime is ${widgetText('uptime')}.` },
+    { match: /network|connection status|\bonline\b|internet/, answer: () => `Network status is ${widgetText('network-status')}.` },
+    {
+      match: /speed test|\bping\b|download speed|upload speed|bandwidth/,
+      answer: () => {
+        const ping = widgetText('st-ping');
+        if (!ping || ping === '--') return 'The connection speed test has not been run yet. Say "run speed test" or use the sidebar button.';
+        return `Latest speed test: ping ${ping}, download ${widgetText('st-download')}, upload ${widgetText('st-upload')}.`;
+      }
+    },
+    {
+      match: /status report|system status|full report|how (are|is) (things|everything|the system)/,
+      answer: () => `Status report: ${buildSidebarSummary()}.`
+    }
+  ];
+  const WIDGET_QUESTION_RE = /\b(what|what's|whats|how|current|check|tell me|report|status)\b|\?$/;
+
+  function tryHandleWidgetQuery(text) {
+    const t = text.trim().replace(WAKE_PHRASE_RE, '').trim().toLowerCase();
+    if (!t || !WIDGET_QUESTION_RE.test(t)) return false;
+
+    for (const q of WIDGET_QUERIES) {
+      if (q.match.test(t)) {
+        speakInstant(q.answer());
         return true;
       }
     }
@@ -1385,16 +1500,13 @@
     beginAwaitingCommand("JARVIS asked a question — listening for your answer...");
   }
 
-  /* Bare "Hey Jarvis" with no trailing request: JARVIS greets the user
-     out loud immediately, then autoListenIfQuestion (triggered because
-     the greeting itself ends in "?") starts the timed listening window
-     automatically. This greeting always uses the instant browser voice
-     rather than a premium TTS provider — fetching premium audio over the
-     network can take several seconds, and a wake-word ack needs to feel
-     immediate, not like it's "thinking" about a fixed line. */
-  function respondToWakeWord() {
-    const greeting = 'What do you need help with today?';
-    speak(greeting, { duration: captionDuration(greeting) });
+  /* Speaks a fixed, locally-known line immediately via the browser's
+     built-in voice, bypassing any configured premium TTS provider. Used
+     anywhere the reply doesn't need AI-quality phrasing and shouldn't
+     wait on a network round trip — the wake-word greeting and the widget
+     / sidebar readout answers above both want to feel instant. */
+  function speakInstant(text) {
+    speak(text, { duration: captionDuration(text) });
     ttsGeneration++;
     const myGen = ttsGeneration;
     if (currentTtsAudio) {
@@ -1402,10 +1514,18 @@
       currentTtsAudio = null;
     }
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();
-    speakWithBrowserVoice(greeting, () => {
+    speakWithBrowserVoice(text, () => {
       if (myGen !== ttsGeneration) return;
-      autoListenIfQuestion(greeting);
+      autoListenIfQuestion(text);
     });
+  }
+
+  /* Bare "Hey Jarvis" with no trailing request: JARVIS greets the user
+     out loud immediately, then autoListenIfQuestion (triggered because
+     the greeting itself ends in "?") starts the timed listening window
+     automatically. */
+  function respondToWakeWord() {
+    speakInstant('What do you need help with today?');
   }
 
   let sending = false;
@@ -1417,6 +1537,7 @@
     speak('YOU: ' + text, { duration: captionDuration(text) });
 
     if (tryHandleVoiceCommand(text)) return;
+    if (tryHandleWidgetQuery(text)) return;
 
     if (!aiConfigured()) {
       chatStatusEl.textContent = 'AI not configured.';
