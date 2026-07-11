@@ -1595,7 +1595,12 @@
   const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
   let recognition = null;
   let recognitionActive = false;
-  let wakeWordEnabled = false;
+  // "Hey Jarvis" listens by default as soon as the dashboard loads, so it
+  // works the first time without the user having to find and click the
+  // toggle button first. Only meaningful when the browser actually
+  // supports SpeechRecognition (see the `if (SpeechRecognitionCtor)`
+  // block below); the toggle stays available to turn it back off.
+  let wakeWordEnabled = !!SpeechRecognitionCtor;
   let awaitingCommand = false;
   let awaitingTimeout = null;   // hard cap: give up if nothing usable is heard at all
   let silenceTimer = null;      // once speech starts, a pause this long ends the turn
@@ -1771,6 +1776,8 @@
         }
       });
     }
+
+    setWakeToggleUI();
   } else {
     if (micBtn) {
       micBtn.disabled = true;
