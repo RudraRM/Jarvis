@@ -1,0 +1,22 @@
+{
+  "name": "jarvis-interactive-ai-interface",
+  "version": "1.0.0",
+  "description": "A fully interactive, Iron Man-inspired JARVIS AI interface built with vanilla HTML, CSS, and JavaScript. Features a holographic system dashboard, real voice/text AI chat, and a live internet speed test -- all running client-side, with no backend server required.",
+  "private": true,
+  "main": "jarvis.html",
+  "scripts": {
+    "start": "npx --yes serve ."
+  },
+  "keywords": [
+    "jarvis",
+    "ai-assistant",
+    "voice-assistant",
+    "dashboard",
+    "vanilla-js"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/RudraRM/Jarvis"
+  }
+}
