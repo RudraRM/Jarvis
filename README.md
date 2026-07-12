@@ -11,24 +11,27 @@ A fully interactive, Iron Man-inspired JARVIS AI interface built with vanilla HT
 ## 🎯 Features
 
 ### Landing Page
-- **Hero Section**: Large animated JARVIS title with glowing cyan effects
+- **Hero Section**: Centered JARVIS title in Roboto Mono with glowing cyan effects
 - **Particle Effects**: Smooth floating particles animated across the screen
-- **Feature Cards**: 4 interactive cards showcasing system capabilities
-- **Call-to-Action**: "INITIALIZE SYSTEM" button with smooth transitions
+- **Call-to-Action**: "INITIALIZE SYSTEM" button anchored to the bottom of the page
 - **Responsive Design**: Works on mobile, tablet, and desktop
 
 ### Main Dashboard
 - **Arc Reactor Core**: Central animated glowing triangle with radiating rings
 - **Real-time Clock**: Live HH:MM:SS digital display
-- **System Metrics**: Stylized power/CPU/memory/thermal readouts for the HUD aesthetic
+- **Live Temperature**: Real current weather for McKinney, TX (see [Live Temperature](#️-live-temperature) below) — not simulated
+- **System Metrics**: Stylized power/CPU/memory readouts for the HUD aesthetic
 - **Live Network Status**: Real online/offline detection via the browser's Network Information API
 - **Status Panels**: Active protocols, alerts, and notifications
+- **Fullscreen Mode**: A real Fullscreen API toggle at the bottom of the right sidebar (or press `F`)
 
 ### Real Voice & AI Chat
 JARVIS includes an actual conversational assistant, not canned responses:
 - **Speech-to-text** via the browser's Web Speech API (tap the mic button and talk)
-- **Text generation** via any OpenAI-compatible Chat Completions endpoint that you configure with your own API key
-- **Text-to-speech** replies via the browser's SpeechSynthesis API
+- **"Hey Jarvis" wake word**: listens in the background and is **on by default** — no need to click anything before it starts working. Toggle it off/on any time with the **HEY JARVIS** button in the left sidebar.
+- **Text generation** via any OpenAI-compatible Chat Completions endpoint or Google Gemini that you configure with your own API key
+- **Text-to-speech** replies via the browser's built-in SpeechSynthesis API, or an optional premium voice (OpenAI TTS or ElevenLabs)
+- **Live dashboard awareness**: JARVIS can read the sidebar readouts (temperature, power, CPU/memory, protocols, alerts, uptime, network, speed test) and answer direct questions about them instantly, with no AI provider required — see [Voice Commands](#️-voice-commands) below
 - Conversation history is kept in-session for context-aware replies
 
 > This is a static, client-only site with no backend. Your API key is stored **only** in your browser's `localStorage` and is sent **only** to the API base URL you configure — never anywhere else. See [AI Setup](#-ai-chat-setup) below.
@@ -39,12 +42,12 @@ A "CONNECTION SPEED TEST" panel in the dashboard measures your **actual** live c
 - **Download** — real throughput measured by downloading a payload and timing it
 - **Upload** — real throughput measured by uploading a payload and timing it
 
-It uses Cloudflare's public, CORS-enabled speed-test endpoints (`speed.cloudflare.com`), the same infrastructure behind `speed.cloudflare.com` and the `@cloudflare/speedtest` library — not a random or simulated number.
+It uses Cloudflare's public, CORS-enabled speed-test endpoints (`speed.cloudflare.com`), the same infrastructure behind `speed.cloudflare.com` and the `@cloudflare/speedtest` library — not a random or simulated number. You can also just say **"Hey Jarvis, run a speed test"** and JARVIS will run it and read the results back to you.
 
 ### Interactive Elements
 - ✨ Smooth hover animations with glow effects
 - 🎬 Page transitions with loading animations
-- ⌨️ Keyboard shortcuts (E: Exit, R: Reset metrics, S: Toggle sidebars)
+- ⌨️ Keyboard shortcuts (E: Exit, R: Reset metrics, S: Toggle sidebars, F: Fullscreen)
 - 🖱️ Click feedback with ripple effects
 - 📱 Fully responsive layout
 
@@ -71,7 +74,14 @@ python -m http.server 8000
 # then open http://localhost:8000/jarvis.html
 ```
 
-No build process, no dependencies, no installation required.
+or, using the included `package.json`:
+
+```bash
+npm start
+# then open the URL it prints
+```
+
+No build process, no dependencies to install — `npm start` just runs `npx serve` to host the static files.
 
 ---
 
@@ -83,6 +93,7 @@ Jarvis/
 ├── jarvis.html   # Markup for the landing page, dashboard, chat panel, and settings modal
 ├── jarvis.css    # All styling and animations
 ├── jarvis.js     # All application logic (dashboard, network status, speed test, voice/AI chat)
+├── package.json  # Project metadata and a convenience `npm start` script
 └── README.md     # This file
 ```
 
@@ -98,10 +109,54 @@ Jarvis/
 - **Metrics**: Click any metric card to expand its detail text
 - **Speed Test**: In the right sidebar, click **RUN SPEED TEST** to measure your real ping, download, and upload speed
 - **Voice Chat**: Click **VOICE CHAT** in the left sidebar to open the chat panel; type a message or tap the mic button to speak
+- **Fullscreen**: Click **ENTER FULLSCREEN** at the bottom of the right sidebar, or press `F`
 - **Keyboard Shortcuts**:
   - **E** — Exit to landing page
   - **R** — Reset dashboard metrics
   - **S** — Toggle sidebar visibility
+  - **F** — Toggle fullscreen
+
+---
+
+## 🗣️ Voice Commands
+
+"Hey Jarvis" listens by default the moment the dashboard loads — no setup needed. Say the wake phrase alone and JARVIS greets you back instantly; say it followed by a request and JARVIS acts on it directly. Phrasing is forgiving (filler words, "please," minor mis-transcriptions like "you tube" all still match).
+
+### Open a site
+| Say | Opens |
+|---|---|
+| "Hey Jarvis, open YouTube" | `youtube.com` |
+| "Hey Jarvis, open Entertainment" | `streamex.net` |
+| "Hey Jarvis, open TikTok" | `tiktok.com` |
+| "Hey Jarvis, open GitHub" | `github.com` |
+| "Hey Jarvis, open Claude" | `claude.ai/new` |
+
+JARVIS opens the site in a new tab and also shows an on-screen "TAP HERE IF IT DID NOT OPEN" link, since browsers can silently block a tab opened from a voice command.
+
+### Read the sidebar
+Answered instantly from the live dashboard readouts — no AI provider required:
+
+| Say | Reads from |
+|---|---|
+| "Hey Jarvis, what is the temperature in McKinney Texas" | TEMPERATURE panel (live McKinney, TX weather) |
+| "Hey Jarvis, what's the power level" | POWER LEVEL panel |
+| "Hey Jarvis, what's the CPU load" | CPU LOAD panel |
+| "Hey Jarvis, what's the memory usage" | MEMORY panel |
+| "Hey Jarvis, what protocols are active" | ACTIVE PROTOCOLS panel |
+| "Hey Jarvis, any alerts?" | ALERTS panel (most recent) |
+| "Hey Jarvis, what is the time" | LOCAL TIME panel |
+| "Hey Jarvis, what's the date" | date display |
+| "Hey Jarvis, what's the uptime" | UPTIME panel |
+| "Hey Jarvis, what's the network status" | NETWORK panel |
+| "Hey Jarvis, what's my ping/download/upload speed" | last stored speed test result (or says none has run yet) |
+| "Hey Jarvis, status report" | reads back everything above in one summary |
+
+### Run the speed test
+| Say | Behavior |
+|---|---|
+| "Hey Jarvis, do a speed test" (or "run"/"start"/"perform") | Actually triggers the real speed test, then reads back the fresh ping/download/upload results |
+
+Anything more open-ended that isn't covered by the patterns above is sent to your configured AI provider, which also receives a live snapshot of the same sidebar readouts so it can answer accurately.
 
 ---
 
@@ -124,6 +179,17 @@ Your settings are written to `localStorage` under `jarvis_ai_settings_v1` and us
 
 **Note on security**: because this project has no server, the API key is used directly from the browser. This is fine for personal/local use, but do not deploy a publicly shared instance with a key baked in — anyone visiting the page could read it from local storage or network requests. For a shared deployment, put a small proxy server in front of your AI provider instead of entering a key that others could see.
 
+### Premium Voice (optional)
+
+By default JARVIS speaks with your browser's built-in voice. For a warmer, studio-quality voice, connect a premium TTS provider in the same settings modal:
+
+| Provider | API Key from | Voice field |
+|----------|--------------|-------------|
+| **OpenAI TTS** | [platform.openai.com](https://platform.openai.com/api-keys) | voice name, e.g. `onyx` |
+| **ElevenLabs** | [elevenlabs.io](https://elevenlabs.io/) | your voice ID |
+
+Click **PREVIEW VOICE** to hear a sample before saving. If the premium voice ever fails (bad key, network error), JARVIS automatically falls back to the browser voice and surfaces the error in the chat panel instead of silently failing. Fixed, instant replies — the "Hey Jarvis" wake-word greeting and the direct sidebar-readout answers — always use the fast browser voice regardless of this setting, since they don't need to wait on a network round trip.
+
 ---
 
 ## ⌨️ Keyboard Shortcuts
@@ -133,6 +199,13 @@ Your settings are written to `localStorage` under `jarvis_ai_settings_v1` and us
 | `E` | Exit to landing page |
 | `R` | Reset dashboard metrics |
 | `S` | Toggle sidebar visibility |
+| `F` | Toggle fullscreen |
+
+---
+
+## 🌡️ Live Temperature
+
+The TEMPERATURE panel shows the real current temperature for McKinney, TX — refreshed every 10 minutes — instead of a simulated value. `weather.com` can't be fetched directly from client-side JavaScript (no CORS headers for cross-origin requests, and scraping its HTML would violate its terms of use), so this pulls the same real-world reading from [Open-Meteo](https://open-meteo.com/), a free, no-API-key, CORS-enabled forecast API built for exactly this kind of client-side use.
 
 ---
 
@@ -186,3 +259,4 @@ This project is licensed under the **MIT License**.
 
 - Inspired by Iron Man's JARVIS system from Marvel
 - Speed test powered by Cloudflare's public speed-test endpoints
+- Live temperature powered by [Open-Meteo](https://open-meteo.com/)
