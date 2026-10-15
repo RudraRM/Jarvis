@@ -260,3 +260,17 @@ This project is licensed under the **MIT License**.
 - Inspired by Iron Man's JARVIS system from Marvel
 - Speed test powered by Cloudflare's public speed-test endpoints
 - Live temperature powered by [Open-Meteo](https://open-meteo.com/)
+
+
+### Teal particle reactor and NVIDIA key option
+
+The interface uses a dark teal energy field inspired by a particle-ring reference.
+Hover near the reactor to bend its filaments; click it or focus it and press Enter/Space
+ to pulse the ring and open voice chat. The ring responds to the assistant's listening
+and speaking states, and respects reduced-motion preferences.
+
+In **VOICE CHAT → settings**, the optional **NVIDIA Build API key** field saves a key
+only to this browser's local storage. **CLEAR KEYS** removes it along with the other
+provider keys. This is a configuration option only: it does not send audio or the key
+to NVIDIA, and browser speech recognition remains active. NVIDIA transcription needs
+a separate backend integration. Do not enter keys on shared devices.
