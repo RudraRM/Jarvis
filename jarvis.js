@@ -4,48 +4,77 @@
   /* ============ DISABLE CONTEXT MENU ============ */
   document.addEventListener('contextmenu', (e) => e.preventDefault());
 
-  /* ============ PARTICLE BACKGROUND ============ */
+  /* Organic particle reactor: reference-inspired teal filaments on black. */
   const canvas = document.getElementById('particle-canvas');
   const ctx = canvas.getContext('2d');
-  let particles = [];
-
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const pointer = { x: 0, y: 0, active: false };
+  let pulseAt = -10000;
+  let lastFrame = 0;
   function resizeCanvas() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    const ratio = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(innerWidth * ratio);
+    canvas.height = Math.round(innerHeight * ratio);
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
   }
   window.addEventListener('resize', resizeCanvas);
+  window.addEventListener('pointermove', (e) => {
+    pointer.x = e.clientX; pointer.y = e.clientY; pointer.active = true;
+  }, { passive: true });
+  document.addEventListener('pointerleave', () => { pointer.active = false; });
   resizeCanvas();
 
-  function makeParticles(n) {
-    particles = Array.from({ length: n }, () => ({
-      x: Math.random() * canvas.width,
-      y: Math.random() * canvas.height,
-      r: Math.random() * 1.8 + 0.4,
-      vx: (Math.random() - 0.5) * 0.25,
-      vy: (Math.random() - 0.5) * 0.25,
-      a: Math.random() * 0.5 + 0.2
-    }));
-  }
-  makeParticles(70);
-
-  function drawParticles() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    particles.forEach((p) => {
-      p.x += p.vx;
-      p.y += p.vy;
-      if (p.x < 0) p.x = canvas.width;
-      if (p.x > canvas.width) p.x = 0;
-      if (p.y < 0) p.y = canvas.height;
-      if (p.y > canvas.height) p.y = 0;
-
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(0, 217, 255, ${p.a})`;
-      ctx.shadowColor = '#00d9ff';
-      ctx.shadowBlur = 6;
-      ctx.fill();
-    });
+  function drawParticles(now) {
     requestAnimationFrame(drawParticles);
+    if (document.hidden || now - lastFrame < (reducedMotion.matches ? 200 : 32)) return;
+    lastFrame = now;
+    ctx.clearRect(0, 0, innerWidth, innerHeight);
+    const dashboard = document.getElementById('dashboard-page').classList.contains('active-page');
+    const target = document.querySelector(dashboard ? '#reactor-core-group' : '.landing-emblem');
+    const box = target.getBoundingClientRect();
+    const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
+    const radius = Math.min(box.width, box.height) * 0.43;
+    if (!radius) return;
+    const state = document.getElementById('reactor-core');
+    const active = state.classList.contains('speaking') || state.classList.contains('listening-state');
+    const t = reducedMotion.matches ? 0 : now * (state.classList.contains('thinking') ? 0.0007 : 0.0003);
+    const pulse = reducedMotion.matches ? 0 : Math.max(0, 1 - (now - pulseAt) / 1200);
+    const dx = pointer.x - cx, dy = pointer.y - cy;
+    const hover = pointer.active && Math.hypot(dx, dy) < radius * 1.3;
+    const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius * 1.5);
+    glow.addColorStop(0, 'rgba(0,100,99,0.16)');
+    glow.addColorStop(0.6, 'rgba(0,74,72,0.12)');
+    glow.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(cx - radius * 1.5, cy - radius * 1.5, radius * 3, radius * 3);
+    for (let band = 0; band < 22; band++) {
+      ctx.beginPath();
+      for (let i = 0; i <= 260; i++) {
+        const a = i / 260 * Math.PI * 2;
+        const wave = Math.sin(a * 5 + t + band * 0.27) * 0.035 +
+          Math.sin(a * 9 - t * 1.4 + band * 0.19) * 0.018;
+        const r = radius * (0.88 + band * 0.006 + wave * (active ? 1.8 : 1) + pulse * 0.08);
+        const pull = hover && !reducedMotion.matches ? Math.pow(Math.max(0, Math.cos(a - Math.atan2(dy, dx))), 8) * 12 : 0;
+        const x = cx + Math.cos(a) * (r + pull), y = cy + Math.sin(a) * (r + pull);
+        if (!i) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        if (i % 3 === 0) {
+          ctx.fillStyle = `rgba(57,205,192,${0.12 + (band % 4) * 0.05})`;
+          ctx.fillRect(x + Math.sin(i * 17 + band) * 4, y + Math.cos(i * 13 + band) * 4, 1, 1);
+        }
+      }
+      ctx.strokeStyle = `rgba(28,184,172,${0.18 + (band % 3) * 0.045 + (hover ? 0.035 : 0)})`;
+      ctx.lineWidth = 0.65;
+      ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius * (0.17 + pulse * 0.025), 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(43,177,167,0.3)';
+    ctx.stroke();
+    for (let i = 0; i < 90; i++) {
+      const a = i * 2.39996 + t * 0.2, r = radius * 0.16 * Math.sqrt(i / 90);
+      ctx.fillStyle = 'rgba(52,172,163,0.16)';
+      ctx.fillRect(cx + Math.cos(a) * r, cy + Math.sin(a) * r, 1, 1);
+    }
   }
   requestAnimationFrame(drawParticles);
 
@@ -840,6 +869,10 @@
   const settingsTtsHint = document.getElementById('settings-tts-hint');
   const settingsTtsPreviewStatus = document.getElementById('settings-tts-preview-status');
 
+  const NVIDIA_STT_KEY = 'jarvis_nvidia_stt_v1';
+  const nvidiaKeyInput = document.getElementById('settings-nvidia-apikey');
+  const nvidiaStatus = document.getElementById('settings-nvidia-status');
+
   const PROVIDER_PRESETS = {
     openai: {
       baseUrl: 'https://api.openai.com/v1',
@@ -979,6 +1012,13 @@
   }
 
   function openSettingsModal() {
+    try {
+      nvidiaKeyInput.value = localStorage.getItem(NVIDIA_STT_KEY) || '';
+      nvidiaStatus.textContent = '';
+    } catch {
+      nvidiaKeyInput.value = '';
+      nvidiaStatus.textContent = 'Browser storage is unavailable.';
+    }
     const s = loadAiSettings();
     const provider = s.provider || 'openai';
     settingsProviderInput.value = provider;
@@ -1006,6 +1046,14 @@
   }
   if (settingsSaveBtn) {
     settingsSaveBtn.addEventListener('click', () => {
+      const nvidiaKey = nvidiaKeyInput.value.trim();
+      try {
+        if (nvidiaKey) localStorage.setItem(NVIDIA_STT_KEY, nvidiaKey);
+        else localStorage.removeItem(NVIDIA_STT_KEY);
+      } catch {
+        nvidiaStatus.textContent = 'Browser storage is unavailable. The key could not be saved.';
+        return;
+      }
       // Voice settings are independent of the chat AI settings and must
       // always be saved, even if the chat fields below are left blank
       // (e.g. someone only wants to configure a premium voice and
@@ -1029,6 +1077,7 @@
         closeSettingsModal();
         chatStatusEl.textContent = ttsProvider !== 'browser' && ttsApiKey
           ? 'Voice settings saved. Fill in the AI provider fields too to enable chat.'
+          : nvidiaKey ? 'NVIDIA key saved on this device. Transcription is not connected; browser speech remains active.'
           : 'Please fill in the required fields to enable chat.';
         return;
       }
@@ -1043,6 +1092,9 @@
     settingsClearBtn.addEventListener('click', () => {
       localStorage.removeItem(SETTINGS_KEY);
       localStorage.removeItem(TTS_SETTINGS_KEY);
+      localStorage.removeItem(NVIDIA_STT_KEY);
+      nvidiaKeyInput.value = '';
+      nvidiaStatus.textContent = '';
       settingsApiKeyInput.value = '';
       settingsTtsApiKeyInput.value = '';
       settingsTtsProviderInput.value = 'browser';
@@ -1650,6 +1702,20 @@
       }
     });
   }
+  const interactiveReactor = document.getElementById('reactor-core-group');
+  function activateReactor() {
+    pulseAt = performance.now();
+    chatPanel.classList.add('open');
+    chatInput.focus();
+  }
+  interactiveReactor.addEventListener('click', activateReactor);
+  interactiveReactor.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      activateReactor();
+    }
+  });
+
   if (chatCloseBtn) chatCloseBtn.addEventListener('click', () => chatPanel.classList.remove('open'));
   if (chatSendBtn) chatSendBtn.addEventListener('click', () => sendChatMessage(chatInput.value));
   if (chatInput) {

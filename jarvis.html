@@ -12,7 +12,7 @@
 </head>
 <body class="darker-theme">
 
-<canvas id="particle-canvas"></canvas>
+<canvas id="particle-canvas" aria-hidden="true"></canvas>
 <div class="scanline-overlay"></div>
 
 <!-- ============ PAGE 1 : LANDING ============ -->
@@ -145,7 +145,7 @@
       <!-- Core + rings + HUD dial share one group so the "guard lines"
            (the HUD tick marks) sweep forward around the core while JARVIS
            is speaking, without touching the core or rings themselves. -->
-      <div class="reactor-core-group" id="reactor-core-group">
+      <div class="reactor-core-group" id="reactor-core-group" role="button" tabindex="0" aria-label="Activate arc reactor and open voice chat" aria-controls="chat-panel">
         <!-- Decorative HUD dial (non-interactive; ticks/arc/spokes injected by JS) -->
         <div class="hud-dial" id="hud-dial" aria-hidden="true"></div>
 
@@ -171,6 +171,7 @@
       <div class="orbit-indicator oi-2"><span class="oi-val" id="oi-2">64%</span></div>
       <div class="orbit-indicator oi-3"><span class="oi-val" id="oi-3">99%</span></div>
 
+      <p class="reactor-hint">TOUCH THE CORE · OPEN VOICE CHAT</p>
       <div class="voice-feedback" id="voice-feedback">SYSTEM ONLINE</div>
     </div>
 
@@ -291,6 +292,16 @@
     <input type="password" id="settings-apikey" placeholder="sk-...">
     <p class="settings-hint" id="settings-provider-hint"></p>
 
+    <hr class="settings-divider">
+    <h3>SPEECH-TO-TEXT · NVIDIA</h3>
+    <label for="settings-nvidia-apikey">NVIDIA Build API key (optional)</label>
+    <input type="password" id="settings-nvidia-apikey" placeholder="nvapi-…" autocomplete="off" spellcheck="false" aria-describedby="settings-nvidia-note">
+    <p class="settings-note" id="settings-nvidia-note">
+      Supply your API key from <a href="https://build.nvidia.com" target="_blank" rel="noopener noreferrer">NVIDIA Build</a>.
+      This option saves the key on this device only. NVIDIA transcription is not connected yet;
+      speech-to-text continues to use your browser. A backend integration is needed to use this key.
+    </p>
+    <p class="settings-hint" id="settings-nvidia-status" role="status" aria-live="polite"></p>
     <hr class="settings-divider">
     <h3>VOICE (TEXT-TO-SPEECH)</h3>
     <p class="settings-note">

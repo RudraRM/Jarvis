@@ -1162,3 +1162,33 @@ body.darker-theme .panel { background: linear-gradient(135deg, rgba(10,16,30,0.7
 .calc-btn.calc-op { color: var(--cyan); }
 .calc-btn.calc-equals { background: var(--cyan); color: #001a22; grid-column: span 1; }
 .calc-btn.calc-zero { grid-column: span 2; }
+
+/* Reference-inspired dark teal energy field. */
+:root { --dark: #000605; --dark-2: #05201e; --cyan: #45c8bd; --cyan-dim: rgba(40,174,164,.25); }
+body, #landing-page, #dashboard-page, body.darker-theme #dashboard-page {
+  background: radial-gradient(ellipse at 50% 48%, #00201f 0%, #000b0a 38%, #000302 78%);
+}
+#particle-canvas { z-index: 3; width: 100%; height: 100%; }
+.galaxy-bg, .grid-bg, .tech-lines, .scanline-overlay { display: none; }
+.landing-emblem > *, .reactor-core-group .hud-dial, .reactor-ring, .reactor-triangle { visibility: hidden; }
+.reactor-core-group {
+  width: min(46vw, 64vh, 520px); height: min(46vw, 64vh, 520px);
+  border-radius: 50%; cursor: pointer; outline: none; z-index: 4;
+}
+.reactor-core-group:focus-visible { outline: 1px solid var(--cyan); outline-offset: 8px; }
+.reactor-core-group .reactor-core { opacity: 0; }
+.reactor-hint { position: absolute; bottom: 19%; font-size: 10px; letter-spacing: 2px; color: #61a59e; text-align: center; }
+body .panel, body.darker-theme .panel { background: linear-gradient(135deg, rgba(3,25,23,.8), rgba(0,7,6,.88)); border-color: rgba(56,169,158,.2); }
+.settings-box { background: #041310; }
+.settings-modal, .chat-panel { z-index: 100; }
+@media (max-width: 768px) {
+  .reactor-core-group { width: min(80vw, 340px); height: min(80vw, 340px); }
+  .reactor-hint { bottom: 3%; font-size: 9px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+
+.top-bar, .bottom-bar, .chat-panel { background-color: #020e0c; }
+.reactor-hint { bottom: 12%; }
+@media (max-width: 768px) { .reactor-hint { bottom: 0; } }
