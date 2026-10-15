@@ -168,12 +168,13 @@ The chat panel needs an AI provider to hold a real conversation. Open the chat p
 |----------|--------------|----------|----------------|
 | **OpenAI** | [platform.openai.com](https://platform.openai.com/api-keys) | `https://api.openai.com/v1` (auto-filled) | `gpt-4o-mini` |
 | **Groq** | [console.groq.com](https://console.groq.com/keys) | `https://api.groq.com/openai/v1` (auto-filled) | `llama-3.3-70b-versatile` |
+| **NVIDIA Build** | [build.nvidia.com](https://build.nvidia.com/) | `https://integrate.api.nvidia.com/v1` (auto-filled) | `meta/llama-3.1-70b-instruct` |
 | **Google Gemini** | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) | not needed — Gemini uses its own endpoint automatically | `gemini-2.0-flash` |
 | **Custom** | your own OpenAI-compatible server/proxy | whatever you run | whatever you host |
 
 Selecting a provider auto-fills the base URL and a suggested model; the Base URL field hides itself for Gemini since it isn't used. Enter your API key and click **SAVE**.
 
-Under the hood, OpenAI/Groq/Custom all go through the same OpenAI-compatible `chat/completions` request format. Gemini is wired up separately since Google's API has a different shape (`generateContent`, `contents`/`parts` instead of `messages`, and the key passed as a query parameter instead of a Bearer header) — the app picks the right request format automatically based on the provider you choose.
+Under the hood, OpenAI/Groq/NVIDIA/Custom all go through the same OpenAI-compatible `chat/completions` request format. Gemini is wired up separately since Google's API has a different shape (`generateContent`, `contents`/`parts` instead of `messages`, and the key passed as a query parameter instead of a Bearer header) — the app picks the right request format automatically based on the provider you choose.
 
 Your settings are written to `localStorage` under `jarvis_ai_settings_v1` and used only for requests to the selected provider. Click **CLEAR KEY** at any time to remove them from your browser.
 

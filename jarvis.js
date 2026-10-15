@@ -888,6 +888,13 @@
       hint: 'Groq is OpenAI-compatible and typically very fast. Get a free key at console.groq.com.',
       keyPlaceholder: 'gsk_...'
     },
+    nvidia: {
+      baseUrl: 'https://integrate.api.nvidia.com/v1',
+      model: 'meta/llama-3.1-70b-instruct',
+      needsBaseUrl: true,
+      hint: 'Enter your NVIDIA Build API key from build.nvidia.com. Uses NVIDIA’s OpenAI-compatible chat API. Choose a model available to your account.',
+      keyPlaceholder: 'nvapi-...'
+    },
     gemini: {
       baseUrl: '',
       model: 'gemini-2.0-flash',
